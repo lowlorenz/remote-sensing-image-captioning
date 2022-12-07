@@ -1,20 +1,16 @@
-from transformers import VisionEncoderDecoderModel, BertTokenizer
+from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
 import pytorch_lightning as pl
 import torch
+from torchmetrics import BLEUScore
 
 class ImageCaptioningSystem(pl.LightningModule):
     def __init__(self, lr):
         super().__init__()
-        self.model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained(
-            "google/vit-base-patch16-224-in21k", "bert-base-uncased"
-        )
-        self.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-        self.model.config.decoder_start_token_id = self.bert_tokenizer.cls_token_id
-        self.model.config.pad_token_id = self.bert_tokenizer.pad_token_id
-        self.model.config.vocab_size = self.model.config.decoder.vocab_size
+        self.model = VisionEncoderDecoderModel.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
+        self.tokenizer = GPT2TokenizerFast.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
         
         self.lr = lr
+        self.val_bleu = BLEUScore()
 
     def forward(self, x):
         return self.model(x)
@@ -23,21 +19,31 @@ class ImageCaptioningSystem(pl.LightningModule):
         pixel_values, sentences, _ = batch
 
         pixel_values = pixel_values.squeeze()        
-        tokens = self.bert_tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
+        tokens = self.tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
 
         outputs = self.model(pixel_values, labels=tokens)
         loss = outputs.loss
         return loss
     
     def validation_step(self, batch, batch_idx):
-        pixel_values, sentences, _ = batch
+        with torch.no_grad():
+            pixel_values, sentences, _ = batch
 
-        pixel_values = pixel_values.squeeze()        
-        tokens = self.bert_tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
+            pixel_values = pixel_values.squeeze()        
+            tokens = self.tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
 
-        outputs = self.forward(pixel_values, labels=tokens)
-        loss = outputs.loss
+            outputs = self.model(pixel_values, labels=tokens)
+            
+            loss = outputs.loss
+            
+        captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
+        self.val_bleu(captions, sentences)
+
         return loss
+
+    def validation_epoch_end(self, outputs):
+        self.log('val/bleu', self.val_bleu.compute(), True)
+        self.val_bleu.reset()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)

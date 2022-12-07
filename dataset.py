@@ -6,7 +6,7 @@ import json
 import unicodedata
 import numpy as np
 from pathlib import Path
-from transformers import VisionEncoderDecoderModel, ViTFeatureExtractor, BertTokenizer
+from transformers import ViTFeatureExtractor
 from torchvision.transforms import ToTensor
 
 def read_annotations_file(root, annotation_file):
@@ -75,7 +75,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
 
-        self.feature_extractor = ViTFeatureExtractor.from_pretrained("google/vit-base-patch16-224-in21k")
+        self.image_processor = ViTFeatureExtractor.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
     
     def __len__(self):
         return len(self.masked_images)
@@ -94,7 +94,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
         if self.target_transform:
             sentence = self.target_transform(sentence)
 
-        pixel_values = self.feature_extractor(images=image, return_tensors="pt").pixel_values
+        pixel_values = self.image_processor(images=image, return_tensors="pt").pixel_values
         
         return pixel_values, sentence, identifier
 

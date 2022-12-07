@@ -36,5 +36,5 @@ if __name__ == '__main__':
 
     t_loader, v_loader, _ = get_data_loaders(hparams)
 
-    trainer = pl.Trainer(accelerator='cuda', devices=1, max_epochs=100, limit_train_batches=0.001, limit_val_batches=0.1)
+    trainer = pl.Trainer(accelerator='cuda', devices=1, max_epochs=100, limit_train_batches=0.1, limit_val_batches=0.1)
     trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader)
