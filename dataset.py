@@ -104,7 +104,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.masked_sentences = self.sentences[self.mask]
         self.masked_identifier = self.identifier[self.mask]
 
-    def random_labeling(self, elements):
+    def add_random_labels(self, elements):
         # Update the mask, set #elementes to true
         idx = np.argwhere(self.mask == False)
         np.random.shuffle(idx)
@@ -118,5 +118,5 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.update_masked_arrays()
 
 if __name__ == '__main__':
-    dataset = NWPU_Captions(root='../NWPU_images', annotations_file='../dataset_nwpu.json', split='test', target_transform=ToTensor(), mask=torch.zeros(100))
+    dataset = NWPU_Captions(root='NWPU_images', annotations_file='dataset_nwpu.json', split='test', target_transform=ToTensor(), mask=torch.zeros(100))
     print(len(dataset))

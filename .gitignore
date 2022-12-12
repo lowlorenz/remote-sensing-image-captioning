@@ -1,2 +1,5 @@
 __pycache__
 lightning_logs
+cluster_outputs
+wandb
+NWPU-Captions
