@@ -2,18 +2,25 @@ from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
 import pytorch_lightning as pl
 import torch
 import wandb
-from torchmetrics import BLEUScore
+from torchmetrics import BLEUScore,  MetricCollection, SacreBLEUScore, CHRFScore
+from transformers import ViTFeatureExtractor
+import pandas as pd
 
 class ImageCaptioningSystem(pl.LightningModule):
     def __init__(self, lr):
         super().__init__()
         self.model = VisionEncoderDecoderModel.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
         self.tokenizer = GPT2TokenizerFast.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
-        
+        self.image_processor = ViTFeatureExtractor.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
         self.lr = lr
-        self.train_bleu = BLEUScore()
-        self.val_bleu = BLEUScore()
-        self.table = wandb.Table(columns=['epoch', 'truth', 'prediction'])
+        self.examples = pd.DataFrame(columns=['epoch', 'truth', 'prediction'])
+
+        metrics = MetricCollection([
+            BLEUScore(), SacreBLEUScore(), CHRFScore()
+        ])
+        
+        self.train_metrics = metrics.clone(prefix='train/')
+        self.val_metrics = metrics.clone(prefix='val/')
 
     def forward(self, x):
         return self.model(x)
@@ -22,7 +29,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         # prepare inputs
         pixel_values, sentences, _ = batch
 
-        pixel_values = pixel_values.squeeze()        
+        pixel_values = pixel_values.squeeze()   
         tokens = self.tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
 
         # inference
@@ -31,26 +38,27 @@ class ImageCaptioningSystem(pl.LightningModule):
         
         # generate human readable captions
         captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
-        self.train_bleu(captions, sentences)    
+        self.train_metrics(captions, sentences)    
 
-        # log loss to wandb
         wandb.log({'train/loss': loss}, step=self.global_step)
         return loss
 
-    def on_train_epoch_end(self, outputs):
-        # calculate bleu score
-        bleu = self.train_bleu.compute()
-        self.train_bleu.reset()
+    def training_epoch_end(self, outputs):
+        # calculate metrics score
+        metrics = self.train_metrics.compute()
+        self.train_metrics.reset()
 
-        # log bleu score
-        self.log('train/bleu', bleu, True)
-        wandb.log({'train/bleu': bleu, 'epoch': self.current_epoch}, step=self.global_step)
+        # log metrics score
+        for key in metrics:           
+            wandb.log({key:metrics[key].cpu().item()}, step=self.global_step)
+
 
     def validation_step(self, batch, batch_idx):
         # inference
-        with torch.no_grad():
+        with torch.no_grad():        
+            # prepare inputs
             pixel_values, sentences, _ = batch
-
+            
             pixel_values = pixel_values.squeeze()        
             tokens = self.tokenizer(sentences, return_tensors = 'pt', padding='longest').input_ids.to(self.device)
 
@@ -61,25 +69,27 @@ class ImageCaptioningSystem(pl.LightningModule):
         # generate human readable captions
         captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
 
-        # calculate bleu score
-        self.val_bleu(captions, sentences)
+        # calculate metrics
+        self.val_metrics(captions, sentences)
 
         # log some examples to wandb
-        if batch_idx % 5 == 0:
-            for i in range(len(sentences)):
-                self.table.add_data(self.current_epoch, sentences[i], captions[i])
-            wandb.log({"val/examples": self.table})
-
+        if batch_idx % 100 == 0:
+            data = {'epoch': [self.current_epoch] * len(sentences), 'truth': sentences, 'prediction': captions}
+            self.examples = pd.concat([self.examples, pd.DataFrame(data=data)])
+            
+        wandb.log({'val/loss': loss}, step=self.global_step)
         return loss
 
-    def on_validation_epoch_end(self, outputs):
-        # calculate bleu score
-        bleu = self.val_bleu.compute()
-        self.val_bleu.reset()
+    def validation_epoch_end(self, outputs):
+        # calculate metrics score
+        metrics = self.val_metrics.compute()
+        self.val_metrics.reset()
+        
+        for key in metrics:           
+            wandb.log({key:metrics[key].cpu().item()}, step=self.global_step)
 
-        # log bleu score and loss to wandb
-        self.log('val/bleu', bleu, True)
-        wandb.log({'val/bleu': bleu, 'val/loss': torch.stack(outputs).mean(), 'epoch': self.current_epoch}, step=self.global_step)
+        # log metrics and examples to wandb
+        wandb.log({"val/examples": self.examples})
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

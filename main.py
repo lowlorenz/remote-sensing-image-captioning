@@ -41,17 +41,24 @@ def get_data_loaders(bs, train_set, val_set, test_set):
 def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug):
     images = Path(data_path, 'NWPU_images')
     annotations = Path(data_path, 'dataset_nwpu.json')
+
+    print('Initalizing dataset...')
+
     train_set = NWPU_Captions(root=images, annotations_file=annotations, split='train', transform=ToTensor())
     val_set = NWPU_Captions(root=images, annotations_file=annotations, split='val', transform=ToTensor())
     test_set = NWPU_Captions(root=images, annotations_file=annotations, split='test', transform=ToTensor())
 
+    print('Masking dataset...')
+
     train_set.set_empty_mask()
     inital_elements = int(train_set.max_length() * init_set_size)
     train_set.add_random_labels(inital_elements)
+    
+    print('Loading model...')
 
     model = ImageCaptioningSystem(lr)
     if debug:
-        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, limit_train_batches=2, limit_val_batches=2)
+        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, limit_train_batches=2, limit_val_batches=2, log_every_n_steps=1)
     else:
         trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs)
 
@@ -61,7 +68,7 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
         t_loader, v_loader, _ = get_data_loaders(bs, train_set, val_set, test_set)
     
         wandb.log({'cycle': cycle}, step=trainer.current_epoch)
-        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader)
+        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader, )
         if sample_method == 'random':
             elements_to_add = int(train_set.max_length() * new_data_size)
             train_set.add_random_labels(elements_to_add)
