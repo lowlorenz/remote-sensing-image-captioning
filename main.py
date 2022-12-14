@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import torch
 import click
 import wandb
-from pathlib import Path 
+from pathlib import Path
 
 def get_data_loaders(bs, train_set, val_set, test_set):
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True, num_workers=4)

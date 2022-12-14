@@ -33,29 +33,25 @@ def read_annotations_file(root, annotation_file):
     }
     
     # Scraping the data from the json file
-    for k in list(metadata.keys()):
-        for i in range(len(metadata[k])):
-            ds = datasets[metadata[k][i]['split']]
-            
-            ds['image'].append(Path(root, k, metadata[k][i]['filename']))
-            ds['image'].append(Path(root, k, metadata[k][i]['filename']))
-            ds['image'].append(Path(root, k, metadata[k][i]['filename']))
-            ds['image'].append(Path(root, k, metadata[k][i]['filename']))
-            
-            ds['sentence'].append(metadata[k][i]['raw'])
-            ds['sentence'].append(metadata[k][i]['raw_1'])
-            ds['sentence'].append(metadata[k][i]['raw_2'])
-            ds['sentence'].append(metadata[k][i]['raw_3'])
-            
-            ds['identifier'].append(metadata[k][i]['filename'].replace(".jpg", f"_{i}"))
-            ds['identifier'].append(metadata[k][i]['filename'].replace(".jpg", f"_{i}"))
-            ds['identifier'].append(metadata[k][i]['filename'].replace(".jpg", f"_{i}"))
-            ds['identifier'].append(metadata[k][i]['filename'].replace(".jpg", f"_{i}"))
+    for key in list(metadata.keys()):
+        for i in range(len(metadata[key])):
+            ds = datasets[metadata[key][i]['split']]
+            for idx in range(5):
+                
+                ds['image'].append(Path(root, key, metadata[key][i]['filename']))
+                
+                if idx == 0:
+                    ds['sentence'].append(metadata[key][i]['raw'])
+                else:
+                    ds['sentence'].append(metadata[key][i][f'raw_{idx}'])
+                
+                ds['identifier'].append(metadata[key][i]['filename'].replace(".jpg", f"_{idx}"))
 
     # Convert lists to numpy arrays
-    for k in list(datasets.keys()):
-        for split in list(datasets[k].keys()):
-            datasets[k][split] = np.array(datasets[k][split])
+    for split in list(datasets.keys()):
+        datasets[split]['sentence'] = np.array(datasets[split]['sentence'], dtype=object)
+        datasets[split]['image'] = np.array(datasets[split]['image'])
+        datasets[split]['identifier'] = np.array(datasets[split]['identifier'])
 
     return datasets
 
