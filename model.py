@@ -38,10 +38,10 @@ class ImageCaptioningSystem(pl.LightningModule):
         
         # generate human readable captions
         captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
-        captions = [s[:s.rfind('<|endoftext|>')] for s in captions]
+        captions = [s[:s.find('<|endoftext|>')] for s in captions]
 
         for i in range(len(captions)):            
-            self.train_metrics(captions[i], sentences[i])    
+            self.train_metrics([captions[i]], [[sentences[i]]])    
 
         wandb.log({'train/loss': loss}, step=self.global_step)
         return loss
@@ -71,11 +71,11 @@ class ImageCaptioningSystem(pl.LightningModule):
             
         # generate human readable captions
         captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
-        captions = [s[:s.rfind('<|endoftext|>')] for s in captions]
+        captions = [s[:s.find('<|endoftext|>')] for s in captions]
 
         # calculate metrics
         for i in range(len(captions)):
-            self.val_metrics(captions[i], sentences[i])
+            self.val_metrics([captions[i]], [[sentences[i]]])
 
         # log some examples to wandb
         if batch_idx % 5 == 0:
