@@ -7,18 +7,6 @@ import click
 import wandb
 from pathlib import Path 
 
-hparams = {
-    'device': 'cuda',
-    'sample_method': 'random',
-    'bs': 4,
-    'lr': 0.0001,
-    'epochs': 1,
-    'epochs_total': 10,
-    'maxcycles': 5,
-    'init_set_size': .05,
-    'new_data_size': .05,
-}
-
 def get_data_loaders(bs, train_set, val_set, test_set):
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True, num_workers=4)
     val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=False, num_workers=4)
