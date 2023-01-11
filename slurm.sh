@@ -18,5 +18,5 @@ fi
 
 module load nvidia/cuda/11.2
 
-python main.py --run_name train_with_increments
-# python main.py --init_set_size 100 --maxcycles 1 --epochs 50 --run_name training_with_full_set
+python main.py --run_name random_test_bleu --bs 32
+# python main.py --bs 8 --init_set_size 100 --maxcycles 1 --epochs 3 --run_name full_test_bleu --val_check_interval 0.1

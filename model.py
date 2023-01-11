@@ -13,7 +13,8 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.tokenizer = GPT2TokenizerFast.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
         self.image_processor = ViTFeatureExtractor.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
         self.lr = lr
-        self.examples = pd.DataFrame(columns=['epoch', 'truth', 'prediction'])
+        self.train_examples = pd.DataFrame(columns=['epoch', 'step', 'truth', 'prediction'])
+        self.val_examples = pd.DataFrame(columns=['epoch', 'truth', 'prediction'])
 
         metrics = MetricCollection([
             BLEUScore(), SacreBLEUScore(), CHRFScore()
@@ -40,13 +41,10 @@ class ImageCaptioningSystem(pl.LightningModule):
         captions = self.tokenizer.batch_decode(outputs.logits.argmax(dim=-1))
         captions = [s[:s.find('<|endoftext|>')] for s in captions]
 
+        # calculate metrics
         for i in range(len(captions)):            
             self.train_metrics([captions[i]], [[sentences[i]]])    
-
-        wandb.log({'train/loss': loss}, step=self.global_step)
-        return loss
-
-    def training_epoch_end(self, outputs):
+            
         # calculate metrics score
         metrics = self.train_metrics.compute()
         self.train_metrics.reset()
@@ -54,6 +52,17 @@ class ImageCaptioningSystem(pl.LightningModule):
         # log metrics score
         for key in metrics:           
             wandb.log({key:metrics[key].cpu().item()}, step=self.global_step)
+
+        # log loss
+        wandb.log({'train/loss': loss}, step=self.global_step)
+
+        # log some examples
+        if batch_idx % 100 == 0:
+            data = {'epoch': [self.current_epoch] * len(sentences), 'step': [self.global_step] * len(sentences), 'truth': sentences, 'prediction': captions}
+            self.train_examples = pd.concat([self.train_examples, pd.DataFrame(data=data)])
+            wandb.log({"train/examples": self.train_examples})
+
+        return loss
 
 
     def validation_step(self, batch, batch_idx):
@@ -80,7 +89,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         # log some examples to wandb
         if batch_idx % 5 == 0:
             data = {'epoch': [self.current_epoch] * len(sentences), 'truth': sentences, 'prediction': captions}
-            self.examples = pd.concat([self.examples, pd.DataFrame(data=data)])
+            self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
             
         wandb.log({'val/loss': loss}, step=self.global_step)
         return loss
@@ -94,7 +103,7 @@ class ImageCaptioningSystem(pl.LightningModule):
             wandb.log({key:metrics[key].cpu().item()}, step=self.global_step)
 
         # log metrics and examples to wandb
-        wandb.log({"val/examples": self.examples})
+        wandb.log({"val/examples": self.val_examples})
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

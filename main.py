@@ -26,7 +26,8 @@ def get_data_loaders(bs, train_set, val_set, test_set):
 @click.option('--run_name', default='test', help='Name of the run.')
 @click.option('--data_path', default='NWPU-Captions/', help='Path to the NWPU-Captions dataset.')
 @click.option('--debug', is_flag=True, help='Debug mode.')
-def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug):
+@click.option('--val_check_interval', default= 1.0, help='Validation check interval.')
+def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval):
     images = Path(data_path, 'NWPU_images')
     annotations = Path(data_path, 'dataset_nwpu.json')
 
@@ -48,7 +49,7 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
     if debug:
         trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, limit_train_batches=2, limit_val_batches=2, log_every_n_steps=1)
     else:
-        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs)
+        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, val_check_interval=val_check_interval)
 
     wandb.init(project="active_learning", config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name}, name=run_name)
 
