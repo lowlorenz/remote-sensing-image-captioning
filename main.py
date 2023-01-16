@@ -28,14 +28,14 @@ def get_data_loaders(bs, train_set, val_set, test_set):
 @click.option('--debug', is_flag=True, help='Debug mode.')
 @click.option('--val_check_interval', default= 1.0, help='Validation check interval.')
 def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval):
-    images = Path(data_path, 'NWPU_images')
-    annotations = Path(data_path, 'dataset_nwpu.json')
+    images_path = Path(data_path, 'NWPU_images')
+    annotations_path = Path(data_path, 'dataset_nwpu.json')
 
     print('Initalizing dataset...')
 
-    train_set = NWPU_Captions(root=images, annotations_file=annotations, split='train', transform=ToTensor())
-    val_set = NWPU_Captions(root=images, annotations_file=annotations, split='val', transform=ToTensor())
-    test_set = NWPU_Captions(root=images, annotations_file=annotations, split='test', transform=ToTensor())
+    train_set = NWPU_Captions(root=images_path, annotations_file=annotations_path, split='train', transform=ToTensor())
+    val_set = NWPU_Captions(root=images_path, annotations_file=annotations_path, split='val', transform=ToTensor())
+    test_set = NWPU_Captions(root=images_path, annotations_file=annotations_path, split='test', transform=ToTensor())
 
     print('Masking dataset...')
 
