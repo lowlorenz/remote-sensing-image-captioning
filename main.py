@@ -2,9 +2,12 @@ from dataset import NWPU_Captions
 from torchvision.transforms import ToTensor
 from model import ImageCaptioningSystem
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
 import torch
 import click
 import wandb
+import datetime
+import os
 from pathlib import Path
 
 def get_data_loaders(bs, train_set, val_set, test_set):
@@ -27,7 +30,12 @@ def get_data_loaders(bs, train_set, val_set, test_set):
 @click.option('--data_path', default='NWPU-Captions/', help='Path to the NWPU-Captions dataset.')
 @click.option('--debug', is_flag=True, help='Debug mode.')
 @click.option('--val_check_interval', default= 1.0, help='Validation check interval.')
-def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval):
+@click.option('--num_devices', default=1, help='Number of devices to train on.')
+@click.option('--num_nodes', default=1, help='Number of nodes to train on.')
+def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval, num_devices, num_nodes):
+    pl.seed_everything(42)
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
     images_path = Path(data_path, 'NWPU_images')
     annotations_path = Path(data_path, 'dataset_nwpu.json')
 
@@ -46,17 +54,33 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
     print('Loading model...')
 
     model = ImageCaptioningSystem(lr)
+    
+    cycle = 0
+    date_time = datetime.datetime.now()
+    # wandb_logger = WandbLogger(
+    #     project="active_learning",
+    #     config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name},
+    #     name=f'{run_name}-{cycle}',
+    #     group=f'ddp-{run_name}-{date_time.strftime("%d-%m-%Y, %H:%M")}'
+    # )
+    
+    print('Setup Trainer ...')
     if debug:
-        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, limit_train_batches=2, limit_val_batches=2, log_every_n_steps=1)
+        trainer = pl.Trainer(
+            accelerator=device, devices=num_devices, strategy='ddp', num_nodes=num_nodes,
+            max_epochs=epochs, limit_train_batches=32, limit_val_batches=32#, logger=wandb_logger     
+        )
     else:
-        trainer = pl.Trainer(accelerator=device, devices=1, max_epochs=epochs, val_check_interval=val_check_interval)
-
-    wandb.init(project="active_learning", config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name}, name=run_name)
+        trainer = pl.Trainer(
+            accelerator=device, devices=num_devices, strategy='ddp', num_nodes=num_nodes,
+            max_epochs=epochs, val_check_interval=val_check_interval#, logger=wandb_logger               
+        )
 
     for cycle in range(maxcycles):
+        print('Get Dataloaders ...')
         t_loader, v_loader, _ = get_data_loaders(bs, train_set, val_set, test_set)
     
-        wandb.log({'cycle': cycle}, step=trainer.current_epoch)
+        print('Fit model ...')
         trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader, )
         if sample_method == 'random':
             elements_to_add = int(train_set.max_length() * new_data_size)
