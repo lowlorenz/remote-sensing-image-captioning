@@ -28,12 +28,6 @@ class ImageCaptioningSystem(pl.LightningModule):
         )
         self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
-        text_metrics = MetricCollection([BLEUScore()])
-        self.train_text_metrics = text_metrics.clone(prefix="train/")
-        self.val_text_metrics = text_metrics.clone(prefix="val/")
-
-        self.train_loss = MeanMetric()
-
         self.cross_entropy = torch.nn.CrossEntropyLoss()
 
     def forward(self, x):
@@ -84,7 +78,6 @@ class ImageCaptioningSystem(pl.LightningModule):
         Returns:
             _type_: CrossEntropyLoss of the batch
         """
-        print("training step on rank: ", self.global_rank)
         # prepare inputs
         pixel_values, sentences_token, img_id, sentences_ids = batch
         batch_size = len(img_id)
@@ -98,62 +91,40 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        self.train_loss.update(loss)
+        self.log('train/loss', loss, on_step=True, on_epoch=False)
 
         # detokenize human readable captions
         captions = self.tokenizer.batch_decode(
             logits.argmax(dim=-1), skip_special_tokens=True
         )
 
-        # calculate metrics
-        for i in range(len(captions)):
-            self.train_text_metrics.update([captions[i]], [sentences_text[i]])
-
-        self.log("train/loss", loss, on_step=True, on_epoch=False, prog_bar=True)
-
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
             return loss
         
         # if this is the main process, log examples every 100 batches
-        if batch_idx % 100 == 0:
-            data = {
-                "epoch": [self.current_epoch] * batch_size,
-                "step": [self.global_step] * batch_size,
-                "truth": sentences_text,
-                "prediction": captions,
-            }
-            self.train_examples = pd.concat(
-                [self.train_examples, pd.DataFrame(data=data)]
-            )
-            #self.log_text({"train/examples": self.train_examples})
+        if batch_idx % 100 != 0:
+            return loss
+        
+        data = {
+            "epoch": [self.current_epoch] * batch_size,
+            "step": [self.global_step] * batch_size,
+            "truth": sentences_text,
+            "prediction": captions,
+        }
+
+        self.train_examples = pd.concat(
+            [self.train_examples, pd.DataFrame(data=data)]
+        )
 
         return loss
     
-    def training_epoch_end(self, outputs):
+    def training_epoch_end(self, outputs):      
         if self.global_rank != 0:
             return
         
-        # calculate metrics score
-        metrics = self.train_text_metrics.compute()
-        self.train_text_metrics.reset()
-
-        # log metrics score by moving them to the cpu and converting them to python float
-        log_dict = {
-            key: value.cpu().item() for key,value in metrics
-        }
-
-        # log accumulated loss
-        self.train_loss.reset()
-        loss = self.train_loss.compute()
-        log_dict["train/loss"] = loss.cpu().item()
-
-        # log epoch
-        log_dict["epoch"] = self.current_epoch
-        
-        # log metrics
-        self.log_dict(log_dict, step=self.global_step)
-
+        self.logger.log_text(key="examples/train", dataframe=self.train_examples, step=self.global_step)
+    	
 
     def validation_step(self, batch, batch_idx):
         """_summary_
@@ -171,61 +142,42 @@ class ImageCaptioningSystem(pl.LightningModule):
             for i in range(batch_size)
         ]
 
+        pixel_values = pixel_values.squeeze()
+
         # inference
-        with torch.no_grad():
-            pixel_values = pixel_values.squeeze()
-            outputs = self.model.generate(pixel_values, max_new_tokens=60)
+        with torch.no_grad():        
+            loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        # generate human readable captions
-        captions = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        self.log('val/loss', loss, on_step=True, on_epoch=True)
 
-        # calculate metrics
-        for i in range(len(captions)):
-            self.val_text_metrics.update([captions[i]], [sentences_text[i]])
+        # detokenize human readable captions
+        captions = self.tokenizer.batch_decode(
+            logits.argmax(dim=-1), skip_special_tokens=True
+        )
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
             return 
         
         # log some examples
-        if batch_idx % 5 == 0:
-            data = {
-                "epoch": [self.current_epoch] * batch_size,
-                "truth": sentences_text,
-                "prediction": captions,
-            }
-            self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
+        if batch_idx % 5 != 0:
+            return
+        
+        data = {
+            "epoch": [self.current_epoch] * batch_size,
+            "step": [self.global_step] * batch_size,
+            "truth": sentences_text,
+            "prediction": captions,
+        }
+
+        self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
     def validation_epoch_end(self, outputs):
-        """_summary_
-
-        Args:
-            outputs (_type_): _description_
-        """
         
         if self.global_rank != 0:
             return
-                
-        # calculate metrics score
-        metrics = self.val_text_metrics.compute()
-        self.val_text_metrics.reset()
 
-        # log metrics score by moving them to the cpu and converting them to python float
-        log_dict = {
-            key: value.cpu().item() for key,value in metrics
-        }
-
-        # log epoch
-        log_dict["epoch"] = self.current_epoch
-        
-        # log metrics
-        self.log_dict(log_dict, step=self.global_step)
-
+        self.logger.log_text(key="examples/val", dataframe=self.val_examples, step=self.global_step)
 
     def configure_optimizers(self):
-        """_summary_
-
-        Returns:
-            _type_: _description_
-        """
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

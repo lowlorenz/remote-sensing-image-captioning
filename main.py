@@ -11,9 +11,9 @@ import os
 from pathlib import Path
 
 def get_data_loaders(bs, train_set, val_set, test_set):
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True, num_workers=4)
-    val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=False, num_workers=4)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs, shuffle=False, num_workers=4)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=bs, shuffle=True, num_workers=8)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=bs, shuffle=False, num_workers=8)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=bs, shuffle=False, num_workers=8)
 
     return train_loader, val_loader, test_loader
 
@@ -57,23 +57,25 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
     
     cycle = 0
     date_time = datetime.datetime.now()
-    # wandb_logger = WandbLogger(
-    #     project="active_learning",
-    #     config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name},
-    #     name=f'{run_name}-{cycle}',
-    #     group=f'ddp-{run_name}-{date_time.strftime("%d-%m-%Y, %H:%M")}'
-    # )
+    date_time_str = date_time.strftime("%d-%m-%Y, %H:%M")
+    wandb_logger = WandbLogger(
+        project="active_learning",
+        config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name},
+        name=f'{run_name}-{cycle}',
+        group=f'ddp-{run_name}-{date_time_str}'
+    )
     
     print('Setup Trainer ...')
     if debug:
         trainer = pl.Trainer(
             accelerator=device, devices=num_devices, strategy='ddp', num_nodes=num_nodes,
-            max_epochs=epochs, limit_train_batches=32, limit_val_batches=32#, logger=wandb_logger     
+            max_epochs=epochs, limit_train_batches=32, limit_val_batches=32, logger=wandb_logger,  
+            log_every_n_steps=8              
         )
     else:
         trainer = pl.Trainer(
             accelerator=device, devices=num_devices, strategy='ddp', num_nodes=num_nodes,
-            max_epochs=epochs, val_check_interval=val_check_interval#, logger=wandb_logger               
+            max_epochs=epochs, val_check_interval=val_check_interval, logger=wandb_logger,
         )
 
     for cycle in range(maxcycles):
@@ -81,7 +83,8 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
         t_loader, v_loader, _ = get_data_loaders(bs, train_set, val_set, test_set)
     
         print('Fit model ...')
-        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader, )
+        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader)
+        trainer.save_checkpoint(f'/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt')
         if sample_method == 'random':
             elements_to_add = int(train_set.max_length() * new_data_size)
             train_set.add_random_labels(elements_to_add)
