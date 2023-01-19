@@ -128,6 +128,10 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.masked_img_ids = self.img_ids[self.mask]
         self.masked_sentences_ids = self.sentences_ids[self.mask]
 
+    def flip_mask(self):
+        self.mask = ~self.mask
+        self.update_masked_arrays()
+
     def add_random_labels(self, num_elements):
         # Update the mask, set num elementes to true
         idx = np.argwhere(self.mask == False)
