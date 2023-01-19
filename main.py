@@ -3,6 +3,7 @@ from torchvision.transforms import ToTensor
 from model import ImageCaptioningSystem
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from prediction_writer import PredictionWriter
 import torch
 import click
 import wandb
@@ -17,19 +18,19 @@ def get_data_loaders(bs, train_set=None, val_set=None, test_set=None):
 
     if train_set:
         train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=bs, shuffle=True, num_workers=8
+            train_set, batch_size=bs, shuffle=True, num_workers=4
         )
         loaders.append(train_loader)
 
     if val_set:
         val_loader = torch.utils.data.DataLoader(
-            val_set, batch_size=bs, shuffle=False, num_workers=8
+            val_set, batch_size=bs, shuffle=False, num_workers=4
         )
         loaders.append(val_loader)
 
     if test_set:
         test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=bs, shuffle=False, num_workers=8
+            test_set, batch_size=bs, shuffle=False, num_workers=4
         )
         loaders.append(test_loader)
 
@@ -47,8 +48,8 @@ def get_data_loaders(bs, train_set=None, val_set=None, test_set=None):
 @click.option("--new_data_size", default=0.05, help="Percentage of added labels per cycle.")
 @click.option("--lr", default=0.0001, help="Learning rate of the optimizer.")
 @click.option("--bs", default=4, help="Batch size.")
-@click.option("--sample_method", default="random", help="Sampling method to retrieve more labels.")
-@click.option("--device", default="cuda", help="Device to train on.")
+@click.option("--sample_method", default="cluster", help="Sampling method to retrieve more labels.")
+@click.option("--device_type", default="cuda", help="Device to train on.")
 @click.option("--run_name", default="test", help="Name of the run.")
 @click.option("--data_path", default="NWPU-Captions/", help="Path to the NWPU-Captions dataset.")
 @click.option("--debug", is_flag=True, help="Debug mode.")
@@ -65,7 +66,7 @@ def train(
     lr: float,
     bs: int,
     sample_method: str,
-    device: str,
+    device_type: str,
     run_name: str,
     data_path: str,
     debug: bool,
@@ -83,7 +84,7 @@ def train(
         "lr": lr,
         "bs": bs,
         "sample_method": sample_method,
-        "device": device,
+        "device_type": device_type,
         "run_name": run_name,
         "data_path": data_path,
         "debug": debug,
@@ -143,36 +144,39 @@ def train(
     group_name = f"ddp-{run_name}-{date_time_str}"
     run_name = f"{run_name}-{cycle}"
 
-    wandb_logger = WandbLogger(
-        project="active_learning",
-        config=config,
-        name=run_name,
-        group=group_name,
+    prediction_path = Path("predictions", run_name, date_time_str)
+    prediction_path.mkdir(parents=True, exist_ok=True)
+
+    prediction_writer = PredictionWriter(
+        write_interval="epoch", root_dir=str(prediction_path)
     )
 
+    # wandb_logger = WandbLogger(
+    #     project="active_learning",
+    #     config=config,
+    #     name=run_name,
+    #     group=group_name,
+    # )
+
+    strategy = "ddp" if num_devices > 1 or num_nodes > 1 else None
+    limit_train_batches = 32 if debug else None
+    limit_val_batches = 32 if debug else None
+    log_every_n_steps = 8 if debug else None
+
     print("Setup Trainer ...")
-    if debug:
-        trainer = pl.Trainer(
-            accelerator=device,
-            devices=num_devices,
-            strategy="ddp",
-            num_nodes=num_nodes,
-            max_epochs=epochs,
-            limit_train_batches=32,
-            limit_val_batches=32,
-            logger=wandb_logger,
-            log_every_n_steps=8,
-        )
-    else:
-        trainer = pl.Trainer(
-            accelerator=device,
-            devices=num_devices,
-            strategy="ddp",
-            num_nodes=num_nodes,
-            d=epochs,
-            val_check_interval=val_check_interval,
-            logger=wandb_logger,
-        )
+    trainer = pl.Trainer(
+        callbacks=[prediction_writer],
+        accelerator=device_type,
+        devices=num_devices,
+        strategy=strategy,
+        num_nodes=num_nodes,
+        max_epochs=epochs,
+        val_check_interval=val_check_interval,
+        limit_train_batches=limit_train_batches,
+        limit_val_batches=limit_val_batches,
+        log_every_n_steps=log_every_n_steps,
+        # logger=wandb_logger,
+    )
 
     for cycle in range(maxcycles):
         print("Get Dataloaders ...")
@@ -195,10 +199,12 @@ def train(
             train_set.add_random_labels(elements_to_add)
 
         if sample_method == "cluster":
-            train_set.flip_mask()
-            train_loader = get_data_loaders(bs, train_set)
-            clusters = strategies.image_diversity(train_loader, model, elements_to_add)
-            train_set.flip_mask()
+            # train_set.flip_mask()
+            unlabeled_loader = get_data_loaders(bs, test_set=test_set)
+            trainer.predict(model, unlabeled_loader)
+
+            # clusters = strategies.image_diversity(train_loader, model, elements_to_add)
+            # train_set.flip_mask()
 
 
 if __name__ == "__main__":

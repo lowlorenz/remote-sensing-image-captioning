@@ -2,11 +2,13 @@ from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
 import pytorch_lightning as pl
 import torch
 from torchmetrics import BLEUScore, MetricCollection, MeanMetric
+
 # from torchmetrics.text.rouge import ROUGEScore
 from transformers import ViTFeatureExtractor
 import pandas as pd
 import functools
 from pytorch_lightning.utilities import rank_zero_only
+from typing import Any, List
 
 
 class ImageCaptioningSystem(pl.LightningModule):
@@ -57,11 +59,10 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         logits = output.logits
         loss = output.loss
-                
-        inputs = logits.reshape(-1, self.model.decoder.config.vocab_size)
-        
 
-        for i in range(1,5):
+        inputs = logits.reshape(-1, self.model.decoder.config.vocab_size)
+
+        for i in range(1, 5):
             label = tokens[:, i, :].squeeze().long().reshape(-1)
             _loss = self.cross_entropy(inputs, label)
             loss += _loss
@@ -69,7 +70,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         return loss, logits
 
     def training_step(self, batch, batch_idx):
-        """ Fits the model to a batch of data and returns the loss 
+        """Fits the model to a batch of data and returns the loss
 
         Args:
             batch (_type_): Batch of the format (pixel_values, sentences_token, img_id, sentences_ids)
@@ -91,7 +92,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        self.log('train/loss', loss, on_step=True, on_epoch=False)
+        self.log("train/loss", loss, on_step=True, on_epoch=False)
 
         # detokenize human readable captions
         captions = self.tokenizer.batch_decode(
@@ -101,11 +102,11 @@ class ImageCaptioningSystem(pl.LightningModule):
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
             return loss
-        
+
         # if this is the main process, log examples every 100 batches
         if batch_idx % 100 != 0:
             return loss
-        
+
         data = {
             "epoch": [self.current_epoch] * batch_size,
             "step": [self.global_step] * batch_size,
@@ -113,18 +114,17 @@ class ImageCaptioningSystem(pl.LightningModule):
             "prediction": captions,
         }
 
-        self.train_examples = pd.concat(
-            [self.train_examples, pd.DataFrame(data=data)]
-        )
+        self.train_examples = pd.concat([self.train_examples, pd.DataFrame(data=data)])
 
         return loss
-    
-    def training_epoch_end(self, outputs):      
+
+    def training_epoch_end(self, outputs):
         if self.global_rank != 0:
             return
-        
-        self.logger.log_text(key="examples/train", dataframe=self.train_examples, step=self.global_step)
-    	
+
+        self.logger.log_text(
+            key="examples/train", dataframe=self.train_examples, step=self.global_step
+        )
 
     def validation_step(self, batch, batch_idx):
         """_summary_
@@ -145,10 +145,10 @@ class ImageCaptioningSystem(pl.LightningModule):
         pixel_values = pixel_values.squeeze()
 
         # inference
-        with torch.no_grad():        
+        with torch.no_grad():
             loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        self.log('val/loss', loss, on_step=True, on_epoch=True)
+        self.log("val/loss", loss, on_step=True, on_epoch=True)
 
         # detokenize human readable captions
         captions = self.tokenizer.batch_decode(
@@ -157,12 +157,12 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
-            return 
-        
+            return
+
         # log some examples
         if batch_idx % 5 != 0:
             return
-        
+
         data = {
             "epoch": [self.current_epoch] * batch_size,
             "step": [self.global_step] * batch_size,
@@ -173,11 +173,37 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
     def validation_epoch_end(self, outputs):
-        
+
         if self.global_rank != 0:
             return
 
-        self.logger.log_text(key="examples/val", dataframe=self.val_examples, step=self.global_step)
+        self.logger.log_text(
+            key="examples/val", dataframe=self.val_examples, step=self.global_step
+        )
+
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
+
+        pixel_values, sentences, img_ids, sentences_ids = batch
+        pixel_values = pixel_values.squeeze()
+
+        with torch.no_grad():
+            image_embeddings = self.model.encoder(
+                pixel_values
+            ).last_hidden_state  # (bs, 196, 768)
+
+        return image_embeddings, img_ids
+
+    # def on_predict_epoch_end(self, results: List[Any]) -> None:
+
+    #     # change format of list from
+    #     # [(img_emb, img_id), (img_emb, img_id), ...] to
+    #     # ([img_emb, img_emb, ...], [img_id, img_id, ...])
+    #     # from https://www.geeksforgeeks.org/python-unzip-a-list-of-tuples/
+    #     img_embeddings, img_ids = list(zip(*results))
+    #     img_embeddings = torch.cat(img_embeddings, axis=0)
+    #     img_ids = torch.cat(img_ids, axis=0)
+
+    #     return img_embeddings, img_ids
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
