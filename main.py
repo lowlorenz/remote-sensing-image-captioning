@@ -32,7 +32,8 @@ def get_data_loaders(bs, train_set, val_set, test_set):
 @click.option('--val_check_interval', default= 1.0, help='Validation check interval.')
 @click.option('--num_devices', default=1, help='Number of devices to train on.')
 @click.option('--num_nodes', default=1, help='Number of nodes to train on.')
-def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval, num_devices, num_nodes):
+@click.option('--ckpt_path', default=None, help='Path to checkpoint to resume training.')
+def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method, device, run_name, data_path, debug, val_check_interval, num_devices, num_nodes, ckpt_path):
     pl.seed_everything(42)
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
@@ -57,7 +58,7 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
     
     cycle = 0
     date_time = datetime.datetime.now()
-    date_time_str = date_time.strftime("%d-%m-%Y, %H:%M")
+    date_time_str = date_time.strftime("%d-%m-%Y-%H-%M")
     wandb_logger = WandbLogger(
         project="active_learning",
         config={'epochs': epochs, 'maxcycles': maxcycles, 'init_set_size': init_set_size, 'new_data_size': new_data_size, 'lr': lr, 'bs': bs, 'sample_method': sample_method, 'device': device, 'run_name': run_name},
@@ -83,11 +84,13 @@ def train(epochs, maxcycles, init_set_size, new_data_size, lr, bs, sample_method
         t_loader, v_loader, _ = get_data_loaders(bs, train_set, val_set, test_set)
     
         print('Fit model ...')
-        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader)
+        trainer.fit(model, train_dataloaders=t_loader, val_dataloaders=v_loader, ckpt_path=ckpt_path)
         trainer.save_checkpoint(f'/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt')
+
         if sample_method == 'random':
             elements_to_add = int(train_set.max_length() * new_data_size)
             train_set.add_random_labels(elements_to_add)
         
+
 if __name__ == '__main__':
     train()
