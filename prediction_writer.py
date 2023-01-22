@@ -39,4 +39,4 @@ class PredictionWriter(BasePredictionWriter):
             img_embeddings,
             str(img_embedding_path),
         )
-        torch.save(img_embeddings, str(img_ids_path))
+        torch.save(img_ids, str(img_ids_path))

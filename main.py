@@ -13,26 +13,34 @@ import os
 from pathlib import Path
 
 
-def get_data_loaders(bs, train_set=None, val_set=None, test_set=None):
+def get_data_loaders(
+    batch_size, train_set=None, val_set=None, test_set=None, unlabeled_set=None
+):
     loaders = []
 
     if train_set:
         train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=bs, shuffle=True, num_workers=4
+            train_set, batch_size=batch_size, shuffle=True, num_workers=4
         )
         loaders.append(train_loader)
 
     if val_set:
         val_loader = torch.utils.data.DataLoader(
-            val_set, batch_size=bs, shuffle=False, num_workers=4
+            val_set, batch_size=batch_size, shuffle=False, num_workers=4
         )
         loaders.append(val_loader)
 
     if test_set:
         test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=bs, shuffle=False, num_workers=4
+            test_set, batch_size=batch_size, shuffle=False, num_workers=4
         )
         loaders.append(test_loader)
+
+    if unlabeled_set:
+        unlabeled_loader = torch.utils.data.DataLoader(
+            unlabeled_set, batch_size=batch_size, shuffle=False, num_workers=4
+        )
+        loaders.append(unlabeled_loader)
 
     if len(loaders) == 1:
         return loaders[0]
@@ -43,11 +51,11 @@ def get_data_loaders(bs, train_set=None, val_set=None, test_set=None):
 # fmt: off
 @click.command()
 @click.option("--epochs", default=10, help="Number of epochs to train per cycle.")
-@click.option("--maxcycles", default=5, help="Number of active learning cycles to train.")
+@click.option("--max_cycles", default=5, help="Number of active learning cycles to train.")
 @click.option("--init_set_size", default=0.05, help="Initial train set size in percent.")
 @click.option("--new_data_size", default=0.05, help="Percentage of added labels per cycle.")
-@click.option("--lr", default=0.0001, help="Learning rate of the optimizer.")
-@click.option("--bs", default=4, help="Batch size.")
+@click.option("--learning_rate", default=0.0001, help="Learning rate of the optimizer.")
+@click.option("--batch_size", default=4, help="Batch size.")
 @click.option("--sample_method", default="cluster", help="Sampling method to retrieve more labels.")
 @click.option("--device_type", default="cuda", help="Device to train on.")
 @click.option("--run_name", default="test", help="Name of the run.")
@@ -60,11 +68,11 @@ def get_data_loaders(bs, train_set=None, val_set=None, test_set=None):
 # fmt: on
 def train(
     epochs: int,
-    maxcycles: int,
+    max_cycles: int,
     init_set_size: float,
     new_data_size: float,
-    lr: float,
-    bs: int,
+    learning_rate: float,
+    batch_size: int,
     sample_method: str,
     device_type: str,
     run_name: str,
@@ -78,11 +86,11 @@ def train(
     # save the config for wandb
     config = {
         "epochs": epochs,
-        "maxcycles": maxcycles,
+        "max_cycles": max_cycles,
         "init_set_size": init_set_size,
         "new_data_size": new_data_size,
-        "lr": lr,
-        "bs": bs,
+        "learning_rate": learning_rate,
+        "batch_size": batch_size,
         "sample_method": sample_method,
         "device_type": device_type,
         "run_name": run_name,
@@ -133,11 +141,6 @@ def train(
     inital_elements = int(train_set.max_length() * init_set_size)
     train_set.add_random_labels(inital_elements)
 
-    print("Loading model...")
-
-    # load the model
-    model = ImageCaptioningSystem(lr)
-
     cycle = 0
     # generate a string in the form of day-month-year-hour-minute for naming the wandb group
     date_time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")
@@ -151,17 +154,17 @@ def train(
         write_interval="epoch", root_dir=str(prediction_path)
     )
 
-    # wandb_logger = WandbLogger(
-    #     project="active_learning",
-    #     config=config,
-    #     name=run_name,
-    #     group=group_name,
-    # )
+    wandb_logger = WandbLogger(
+        project="active_learning",
+        config=config,
+        name=run_name,
+        group=group_name,
+    )
 
     strategy = "ddp" if num_devices > 1 or num_nodes > 1 else None
     limit_train_batches = 32 if debug else None
     limit_val_batches = 32 if debug else None
-    log_every_n_steps = 8 if debug else None
+    log_every_n_steps = 8 if debug else 50
 
     print("Setup Trainer ...")
     trainer = pl.Trainer(
@@ -175,36 +178,51 @@ def train(
         limit_train_batches=limit_train_batches,
         limit_val_batches=limit_val_batches,
         log_every_n_steps=log_every_n_steps,
-        # logger=wandb_logger,
+        precision=16,
+        logger=wandb_logger,
     )
 
-    for cycle in range(maxcycles):
+    for cycle in range(max_cycles):
+        print("Loading model...")
+        model = ImageCaptioningSystem(learning_rate)
+        prediction_writer.update_cycle(cycle)
+
         print("Get Dataloaders ...")
-        # train_loader, val_loader = get_data_loaders(bs, train_set, val_set)
+        train_loader, val_loader = get_data_loaders(batch_size, train_set, val_set)
 
-        # print("Fit model ...")
-        # trainer.fit(
-        #     model,
-        #     train_dataloaders=train_loader,
-        #     val_dataloaders=val_loader,
-        #     ckpt_path=ckpt_path,
-        # )
-        # trainer.save_checkpoint(
-        #     f"/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
-        # )
+        print("Fit model ...")
+        trainer.fit(
+            model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path=ckpt_path,
+        )
+        trainer.save_checkpoint(
+            f"/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
+        )
 
+        if cycle == max_cycles - 1:
+            break
+
+        print("Adding new labels ...")
         elements_to_add = int(train_set.max_length() * new_data_size)
 
         if sample_method == "random":
             train_set.add_random_labels(elements_to_add)
 
         if sample_method == "cluster":
-            # train_set.flip_mask()
-            unlabeled_loader = get_data_loaders(bs, test_set=test_set)
+            train_set.flip_mask()
+            unlabeled_loader = get_data_loaders(batch_size, unlabeled_set=train_set)
             trainer.predict(model, unlabeled_loader)
 
-            # clusters = strategies.image_diversity(train_loader, model, elements_to_add)
-            # train_set.flip_mask()
+            current_prediction_path = prediction_path / str(cycle)
+
+            img_ids = strategies.diversity_based_sample(
+                current_prediction_path, elements_to_add, "image"
+            )
+
+            train_set.flip_mask()
+            train_set.add_labels_by_img_id(img_ids)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         Returns:
             _type_: _description_
         """
-        label = tokens[:, 0, :].squeeze().long().contiguous()
+        label = tokens[:, 0, :].long().contiguous()
         output = self.model(pixel_values=pixel_values, labels=label)
 
         logits = output.logits
@@ -88,7 +88,7 @@ class ImageCaptioningSystem(pl.LightningModule):
             for i in range(batch_size)
         ]
 
-        pixel_values = pixel_values.squeeze()
+        pixel_values = pixel_values.squeeze(dim=1)
 
         loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
@@ -142,7 +142,7 @@ class ImageCaptioningSystem(pl.LightningModule):
             for i in range(batch_size)
         ]
 
-        pixel_values = pixel_values.squeeze()
+        pixel_values = pixel_values.squeeze(dim=1)
 
         # inference
         with torch.no_grad():
@@ -184,12 +184,14 @@ class ImageCaptioningSystem(pl.LightningModule):
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
 
         pixel_values, sentences, img_ids, sentences_ids = batch
-        pixel_values = pixel_values.squeeze()
+        pixel_values = pixel_values.squeeze(dim=1)
 
         with torch.no_grad():
             image_embeddings = self.model.encoder(
                 pixel_values
-            ).last_hidden_state  # (bs, 196, 768)
+            ).pooler_output  # (batch_size, hidden_size)
+
+        ## Text gerneation
 
         return image_embeddings, img_ids
 

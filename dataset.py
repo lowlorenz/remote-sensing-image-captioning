@@ -141,6 +141,13 @@ class NWPU_Captions(torch.utils.data.Dataset):
 
         self.update_masked_arrays()
 
+    def add_labels_by_img_id(self, query: torch.Tensor):
+        query = query.unsqueeze(dim=1)
+        ids = torch.tensor(self.img_ids)
+        mask = (ids == query).any(dim=0).numpy()
+        self.mask = mask + self.mask
+        self.update_masked_arrays()
+
     def set_empty_mask(self):
         self.mask = np.zeros_like(self.images, dtype=bool)
         self.update_masked_arrays()
