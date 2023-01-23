@@ -141,48 +141,47 @@ def train(
     inital_elements = int(train_set.max_length() * init_set_size)
     train_set.add_random_labels(inital_elements)
 
-    cycle = 0
     # generate a string in the form of day-month-year-hour-minute for naming the wandb group
     date_time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")
-    group_name = f"ddp-{run_name}-{date_time_str}"
-    run_name = f"{run_name}-{cycle}"
+    group_name = f"{run_name}-{date_time_str}"
 
     prediction_path = Path("predictions", run_name, date_time_str)
     prediction_path.mkdir(parents=True, exist_ok=True)
 
-    prediction_writer = PredictionWriter(
-        write_interval="epoch", root_dir=str(prediction_path)
-    )
-
-    wandb_logger = WandbLogger(
-        project="active_learning",
-        config=config,
-        name=run_name,
-        group=group_name,
-    )
-
     strategy = "ddp" if num_devices > 1 or num_nodes > 1 else None
     limit_train_batches = 32 if debug else None
     limit_val_batches = 32 if debug else None
-    log_every_n_steps = 8 if debug else 50
-
-    print("Setup Trainer ...")
-    trainer = pl.Trainer(
-        callbacks=[prediction_writer],
-        accelerator=device_type,
-        devices=num_devices,
-        strategy=strategy,
-        num_nodes=num_nodes,
-        max_epochs=epochs,
-        val_check_interval=val_check_interval,
-        limit_train_batches=limit_train_batches,
-        limit_val_batches=limit_val_batches,
-        log_every_n_steps=log_every_n_steps,
-        precision=16,
-        logger=wandb_logger,
-    )
+    log_every_n_steps = 8  # if debug else 50
 
     for cycle in range(max_cycles):
+        prediction_writer = PredictionWriter(
+            write_interval="epoch", root_dir=str(prediction_path)
+        )
+        wandb_run_name = f"{run_name}-{cycle}"
+
+        wandb_logger = WandbLogger(
+            project="active_learning",
+            config=config,
+            name=wandb_run_name,
+            group=group_name,
+        )
+
+        print("Setup Trainer ...")
+        trainer = pl.Trainer(
+            callbacks=[prediction_writer],
+            accelerator=device_type,
+            devices=num_devices,
+            strategy=strategy,
+            num_nodes=num_nodes,
+            max_epochs=epochs,
+            val_check_interval=val_check_interval,
+            limit_train_batches=limit_train_batches,
+            limit_val_batches=limit_val_batches,
+            log_every_n_steps=log_every_n_steps,
+            precision=16,
+            logger=wandb_logger,
+        )
+
         print("Loading model...")
         model = ImageCaptioningSystem(learning_rate)
         prediction_writer.update_cycle(cycle)
@@ -197,9 +196,12 @@ def train(
             val_dataloaders=val_loader,
             ckpt_path=ckpt_path,
         )
+
         trainer.save_checkpoint(
             f"/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
         )
+
+        wandb_logger.experiment.finish()
 
         if cycle == max_cycles - 1:
             break

@@ -195,17 +195,5 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return image_embeddings, img_ids
 
-    # def on_predict_epoch_end(self, results: List[Any]) -> None:
-
-    #     # change format of list from
-    #     # [(img_emb, img_id), (img_emb, img_id), ...] to
-    #     # ([img_emb, img_emb, ...], [img_id, img_id, ...])
-    #     # from https://www.geeksforgeeks.org/python-unzip-a-list-of-tuples/
-    #     img_embeddings, img_ids = list(zip(*results))
-    #     img_embeddings = torch.cat(img_embeddings, axis=0)
-    #     img_ids = torch.cat(img_ids, axis=0)
-
-    #     return img_embeddings, img_ids
-
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
