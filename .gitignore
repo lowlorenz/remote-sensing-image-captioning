@@ -1,0 +1,12 @@
+__pycache__
+lightning_logs
+cluster_outputs
+wandb
+NWPU-Captions
+.vscode
+testing.ipynb
+*mnist*
+*ubyte*
+active_learning
+*cache*
+predictions
