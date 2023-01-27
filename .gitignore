@@ -10,3 +10,5 @@ testing.ipynb
 active_learning
 *cache*
 predictions
+nlgeval
+test.py

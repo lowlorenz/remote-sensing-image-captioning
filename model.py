@@ -1,14 +1,9 @@
-from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
+from typing import Any, Tuple
+
+import pandas as pd
 import pytorch_lightning as pl
 import torch
-from torchmetrics import BLEUScore, MetricCollection, MeanMetric
-
-# from torchmetrics.text.rouge import ROUGEScore
-from transformers import ViTFeatureExtractor
-import pandas as pd
-import functools
-from pytorch_lightning.utilities import rank_zero_only
-from typing import Any, List
+from transformers import GPT2TokenizerFast, VisionEncoderDecoderModel
 
 
 class ImageCaptioningSystem(pl.LightningModule):
@@ -43,7 +38,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         """
         return self.model(x)
 
-    def calculate_loss(self, pixel_values, tokens):
+    def calculate_loss(self, pixel_values, tokens) -> Tuple[torch.Tensor, torch.Tensor]:
         """calculate loss for a sentence - similar to the implementation of the model
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/vision_encoder_decoder/modeling_vision_encoder_decoder.py#L628
 
@@ -52,7 +47,7 @@ class ImageCaptioningSystem(pl.LightningModule):
             targets (_type_): _description_
 
         Returns:
-            _type_: _description_
+            tuple(torch.tensor, torch.tensor): Return the accumulated loss and the logits of the model
         """
         label = tokens[:, 0, :].long().contiguous()
         output = self.model(pixel_values=pixel_values, labels=label)
@@ -183,8 +178,9 @@ class ImageCaptioningSystem(pl.LightningModule):
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
 
-        pixel_values, sentences, img_ids, sentences_ids = batch
+        pixel_values, sentences_token, img_ids, sentences_ids = batch
         pixel_values = pixel_values.squeeze(dim=1)
+        label = sentences_token[:, 0, :].long().contiguous()
 
         with torch.no_grad():
             image_embeddings = self.model.encoder(
@@ -192,8 +188,12 @@ class ImageCaptioningSystem(pl.LightningModule):
             ).pooler_output  # (batch_size, hidden_size)
 
         ## Text gerneation
+        with torch.no_grad():
+            logits = self.model(pixel_values=pixel_values, labels=label).logits
 
-        return image_embeddings, img_ids
+        predicted_tokens = logits.argmax(dim=-1)
+
+        return image_embeddings, img_ids, predicted_tokens
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
