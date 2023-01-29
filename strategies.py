@@ -13,9 +13,9 @@ def load_embeddings(
     expected_num_files: int,
 ):
     if type == "image":
-        load_image_embeddings(path, expected_num_files)
+        return load_image_embeddings(path, expected_num_files)
     elif type == "text":
-        load_text_embeddings(path, expected_num_files)
+        return load_text_embeddings(path, expected_num_files)
 
 
 def load_text_embeddings(

@@ -67,6 +67,7 @@ def get_data_loaders(
 @click.option("--num_devices", default=1, help="Number of devices to train on.")
 @click.option("--num_nodes", default=1, help="Number of nodes to train on.")
 @click.option("--ckpt_path", default=None, help="Path to checkpoint to resume training.")
+@click.option("--seed", default=42, help="Seed for reproducibility.")
 # fmt: on
 def train(
     epochs: int,
@@ -84,6 +85,7 @@ def train(
     num_devices: int,
     num_nodes: int,
     ckpt_path: str,
+    seed: int,
 ) -> None:
     # save the config for wandb
     config = {
@@ -106,7 +108,7 @@ def train(
 
     # seed everything for reproducibility
     # between the different nodes and devices
-    pl.seed_everything(42)
+    pl.seed_everything(seed)
     # set tokenizer parrallelism to false
     # this is needed because of the multiprocessing inherent to ddp
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -240,6 +242,11 @@ def train(
 
         elements_to_add = int(train_set.max_length() * new_data_size)
 
+        if sample_method == "random":            
+            print("Adding random labels ...")
+            train_set.add_random_labels(elements_to_add)
+            continue
+
         print("Predicting unlabeled data ...")
         prediction_writer.update_mode("unlabeled")
 
@@ -249,10 +256,6 @@ def train(
         train_set.flip_mask()
 
         unlabeled_prediction_path = prediction_writer.current_dir
-
-        print("Adding new labels ...")
-        if sample_method == "random":
-            train_set.add_random_labels(elements_to_add)
 
         if sample_method == "cluster":
 
