@@ -164,6 +164,8 @@ def train(
     limit_val_batches = 32 if debug else None
     log_every_n_steps = 8  # if debug else 50
 
+    num_gpus = num_devices * num_nodes
+
     for cycle in range(max_cycles):
         early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
 
@@ -255,7 +257,10 @@ def train(
         if sample_method == "cluster":
 
             img_ids = strategies.diversity_based_sample(
-                unlabeled_prediction_path, elements_to_add, "image"
+                path=unlabeled_prediction_path,
+                num_clusters=elements_to_add,
+                type="image",
+                expected_num_files=num_gpus,
             )
 
             train_set.add_labels_by_img_id(img_ids)
