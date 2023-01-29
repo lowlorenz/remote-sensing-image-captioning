@@ -113,13 +113,13 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return loss
 
-    def training_epoch_end(self, outputs):
-        if self.global_rank != 0:
-            return
+    # def training_epoch_end(self, outputs):
+    #     if self.global_rank != 0:
+    #         return
 
-        self.logger.log_text(
-            key="examples/train", dataframe=self.train_examples, step=self.global_step
-        )
+    #     self.logger.log_text(
+    #         key="examples/train", dataframe=self.train_examples, step=self.global_step
+    #     )
 
     def validation_step(self, batch, batch_idx):
         """_summary_
@@ -167,14 +167,15 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
-    def validation_epoch_end(self, outputs):
+    # def validation_epoch_end(self, outputs):
 
-        if self.global_rank != 0:
-            return
+    #     if self.global_rank != 0:
+    #         return
 
-        self.logger.log_text(
-            key="examples/val", dataframe=self.val_examples, step=self.global_step
-        )
+    #     self.logger.log_text(
+    #         key="examples/val", dataframe=self.val_examples, step=self.global_step
+    #     )
+
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
 

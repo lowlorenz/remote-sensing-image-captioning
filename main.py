@@ -3,14 +3,15 @@ from torchvision.transforms import ToTensor
 from model import ImageCaptioningSystem
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from prediction_writer import PredictionWriter
 import torch
-from torch.utils.data import Subset
 import click
 import datetime
 import strategies
 import os
 from pathlib import Path
+
 from evaluation import eval_validation
 
 
@@ -47,38 +48,6 @@ def get_data_loaders(
         return loaders[0]
 
     return tuple(loaders)
-
-
-def build_lightning_trainer(**kwargs):
-    prediction_writer = PredictionWriter(
-        write_interval="epoch", root_dir=str(kwargs["prediction_path_root"])
-    )
-    wandb_run_name = f"{kwargs['run_name']}-{kwargs['cycle']}"
-
-    wandb_logger = WandbLogger(
-        project="active_learning",
-        config=kwargs["config"],
-        name=kwargs["wandb_run_name"],
-        group=kwargs["group_name"],
-    )
-
-    print("Setup Trainer ...")
-    trainer = pl.Trainer(
-        callbacks=[prediction_writer],
-        accelerator=kwargs["device_type"],
-        devices=kwargs["num_devices"],
-        strategy=kwargs["strategy"],
-        num_nodes=kwargs["num_nodes"],
-        max_epochs=kwargs["epochs"],
-        val_check_interval=kwargs["val_check_interval"],
-        limit_train_batches=kwargs["limit_train_batches"],
-        limit_val_batches=kwargs["limit_val_batches"],
-        log_every_n_steps=kwargs["log_every_n_steps"],
-        precision=16,
-        logger=wandb_logger,
-    )
-
-    return train, wandb_logger, prediction_writer
 
 
 # fmt: off
@@ -167,6 +136,7 @@ def train(
         transform=ToTensor(),
     )
 
+    print("Masking dataset...")
     if debug:
         train_set.set_empty_mask()
         val_set.set_empty_mask()
@@ -176,12 +146,11 @@ def train(
         val_set.add_random_labels(100)
         test_set.add_random_labels(100)
 
-    print("Masking dataset...")
-
-    # generate a random mask for the initial train set
-    # train_set.set_empty_mask()
-    # inital_elements = int(train_set.max_length() * init_set_size)
-    # train_set.add_random_labels(inital_elements)
+    else:
+        # generate a random mask for the initial train set
+        train_set.set_empty_mask()
+        inital_elements = int(train_set.max_length() * init_set_size)
+        train_set.add_random_labels(inital_elements)
 
     # generate a string in the form of day-month-year-hour-minute for naming the wandb group
     date_time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")
@@ -196,21 +165,23 @@ def train(
     log_every_n_steps = 8  # if debug else 50
 
     for cycle in range(max_cycles):
+        early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
+
         prediction_writer = PredictionWriter(
             write_interval="epoch", root_dir=str(prediction_path_root)
         )
         wandb_run_name = f"{run_name}-{cycle}"
 
-        wandb_logger = WandbLogger(
-            project="active_learning",
-            config=config,
-            name=wandb_run_name,
-            group=group_name,
-        )
+        # wandb_logger = WandbLogger(
+        #     project="active_learning",
+        #     config=config,
+        #     name=wandb_run_name,
+        #     group=group_name,
+        # )
 
         print("Setup Trainer ...")
         trainer = pl.Trainer(
-            callbacks=[prediction_writer],
+            callbacks=[prediction_writer, early_stopping_callback],
             accelerator=device_type,
             devices=num_devices,
             strategy=strategy,
@@ -221,7 +192,7 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            logger=wandb_logger,
+            # logger=wandb_logger,
         )
 
         print("Loading model...")
@@ -248,16 +219,19 @@ def train(
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
 
-        val_prediction_path = prediction_writer.current_dir
-        reference_paths = [f"val_references_{i}.txt" for i in range(5)]
+        # if trainer.global_rank == 0:
+        #     val_prediction_path = prediction_writer.current_dir
+        #     reference_paths = [f"val_references_{i}.txt" for i in range(5)]
 
-        mean_bleu, mean_meteor = eval_validation(reference_paths, val_prediction_path)
+        #     mean_bleu, mean_meteor = eval_validation(
+        #         reference_paths, val_prediction_path
+        #     )
 
-        wandb_logger.experiment.summary["val_bleu"] = mean_bleu
-        wandb_logger.experiment.summary["val_meteor"] = mean_meteor
-        wandb_logger.experiment.summary["cycle"] = cycle
+        #     wandb_logger.experiment.summary["val_bleu"] = mean_bleu
+        #     wandb_logger.experiment.summary["val_meteor"] = mean_meteor
+        #     wandb_logger.experiment.summary["cycle"] = cycle
 
-        wandb_logger.experiment.finish()
+        #     wandb_logger.experiment.finish()
 
         if cycle == max_cycles - 1:
             break
