@@ -1,13 +1,26 @@
 from typing import Any, Tuple
-
+from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
 import pandas as pd
 import pytorch_lightning as pl
 import torch
 from transformers import GPT2TokenizerFast, VisionEncoderDecoderModel
+from torchmetrics import BLEUScore
+from torchmetrics.text.rouge import ROUGEScore
+from nltk.translate.meteor_score import meteor_score as meteor
+from nltk import word_tokenize, download
+from transformers import ViTFeatureExtractor
+import functools
+from pytorch_lightning.utilities import rank_zero_only
+from typing import Any, List
+import statistics as stats
+
+# download('punkt')
+# download('wordnet')
+# download('omw-1.4')
 
 
 class ImageCaptioningSystem(pl.LightningModule):
-    def __init__(self, lr):
+    def __init__(self, lr, device_type: str, sampling_method):
         super().__init__()
         """_summary_
         """
@@ -20,6 +33,9 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         self.lr = lr
 
+        self.device_type = device_type
+        self.method = sampling_method
+
         self.train_examples = pd.DataFrame(
             columns=["epoch", "step", "truth", "prediction"]
         )
@@ -28,26 +44,11 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.cross_entropy = torch.nn.CrossEntropyLoss()
 
     def forward(self, x):
-        """_summary_
-
-        Args:
-            x (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
         return self.model(x)
 
-    def calculate_loss(self, pixel_values, tokens) -> Tuple[torch.Tensor, torch.Tensor]:
+    def calculate_loss(self, pixel_values, tokens):
         """calculate loss for a sentence - similar to the implementation of the model
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/vision_encoder_decoder/modeling_vision_encoder_decoder.py#L628
-
-        Args:
-            inputs (_type_): _description_
-            targets (_type_): _description_
-
-        Returns:
-            tuple(torch.tensor, torch.tensor): Return the accumulated loss and the logits of the model
         """
         label = tokens[:, 0, :].long().contiguous()
         output = self.model(pixel_values=pixel_values, labels=label)
@@ -94,6 +95,11 @@ class ImageCaptioningSystem(pl.LightningModule):
             logits.argmax(dim=-1), skip_special_tokens=True
         )
 
+        for i in range(len(captions)):
+            self.train_bleu(captions[i], [sentences_text[i]])
+            self.train_rouge(captions[i], [sentences_text[i]])
+            self.train_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
+
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
             return loss
@@ -113,21 +119,26 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return loss
 
-    # def training_epoch_end(self, outputs):
-    #     if self.global_rank != 0:
-    #         return
+    def training_epoch_end(self, outputs):
+        if self.global_rank != 0:
+            return
 
-    #     self.logger.log_text(
-    #         key="examples/train", dataframe=self.train_examples, step=self.global_step
-    #     )
+        train_bleu = self.train_bleu.compute()
+        self.log("train/bleu", train_bleu, on_epoch=True)
+        train_rouge = self.train_rouge.compute()
+        self.log("train/rouge", train_rouge, on_epoch=True)
+        train_meteor = stats.mean(self.train_meteor)
+        self.log("train/meteor", train_meteor, on_epoch=True)
+
+        self.logger.log_text(
+            key="examples/train", dataframe=self.train_examples, step=self.global_step
+        )
+
+        self.train_meteor = []
+        self.train_rouge.reset()
+        self.train_bleu.reset()
 
     def validation_step(self, batch, batch_idx):
-        """_summary_
-
-        Args:
-            batch (_type_): _description_
-            batch_idx (_type_): _description_
-        """
         # prepare inputs
         pixel_values, sentences_token, img_id, sentences_ids = batch
         batch_size = len(img_id)
@@ -150,6 +161,11 @@ class ImageCaptioningSystem(pl.LightningModule):
             logits.argmax(dim=-1), skip_special_tokens=True
         )
 
+        for i in range(len(captions)):
+            self.val_bleu(captions[i], [sentences_text[i]])
+            self.val_rouge(captions[i], [sentences_text[i]])
+            self.val_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
+
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
             return
@@ -167,34 +183,50 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
-    # def validation_epoch_end(self, outputs):
+    def validation_epoch_end(self, outputs):
+        if self.global_rank != 0:
+            return
+        val_bleu = self.val_bleu.compute()
+        self.log("val/bleu", val_bleu, on_epoch=True)
+        self.val_bleu.reset()
+        val_rouge = self.val_rouge.compute()
+        self.log("val/rouge", val_rouge, on_epoch=True)
+        self.val_rouge.reset()
+        val_meteor = stats.mean(self.val_meteor)
+        self.log("val/meteor", val_meteor, on_epoch=True)
+        self.val_meteor = []
+        self.logger.log_text(
+            key="examples/val", dataframe=self.val_examples, step=self.global_step
+        )
 
-    #     if self.global_rank != 0:
-    #         return
-
-    #     self.logger.log_text(
-    #         key="examples/val", dataframe=self.val_examples, step=self.global_step
-    #     )
-
-
-    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
-
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
+        sentence_conf = None
+        image_embeddings = None
+        predicted_tokens = None
         pixel_values, sentences_token, img_ids, sentences_ids = batch
         pixel_values = pixel_values.squeeze(dim=1)
+        bs = pixel_values.shape[0]
         label = sentences_token[:, 0, :].long().contiguous()
 
         with torch.no_grad():
-            image_embeddings = self.model.encoder(
-                pixel_values
-            ).pooler_output  # (batch_size, hidden_size)
+            # Confidence
+            if "conf" in self.method:
+                out = self.model(pixel_values=pixel_values, labels=empty_label, output_hidden_states=True)
+                logits = out.logits
+                logits_softmax = torch.nn.functional.softmax(logits, dim=2)
+                word_conf, _ = torch.max(logits_softmax, dim=2)
+                sentence_conf = torch.mean(word_conf, dim=1)
+                assert torch.numel(sentence_conf) == bs
+            # Image diversity
+            if "cluster" in self.method:
+                image_embeddings = self.model.encoder(
+                    pixel_values
+                ).pooler_output  # (batch_size, hidden_size)
+                logits = self.model(pixel_values=pixel_values, labels=label).logits
 
-        ## Text gerneation
-        with torch.no_grad():
-            logits = self.model(pixel_values=pixel_values, labels=label).logits
+                predicted_tokens = logits.argmax(dim=-1)
 
-        predicted_tokens = logits.argmax(dim=-1)
-
-        return image_embeddings, img_ids, predicted_tokens
+        return sentence_conf, image_embeddings, img_ids, predicted_tokens
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

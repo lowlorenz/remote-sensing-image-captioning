@@ -6,13 +6,18 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from prediction_writer import PredictionWriter
 import torch
+from torch.utils.data import DataLoader
 import click
+import wandb
 import datetime
 import strategies
 import os
 from pathlib import Path
-
+from sklearn.model_selection import train_test_split
 from evaluation import eval_validation
+
+with open("secrets.txt", "r") as config_key:
+    api_key = config_key.readline().stri
 
 
 def get_data_loaders(
@@ -67,7 +72,8 @@ def get_data_loaders(
 @click.option("--num_devices", default=1, help="Number of devices to train on.")
 @click.option("--num_nodes", default=1, help="Number of nodes to train on.")
 @click.option("--ckpt_path", default=None, help="Path to checkpoint to resume training.")
-@click.option("--seed", default=42, help="Seed for reproducibility.")
+@click.option("--mode", default="train", help="Choose between train and test mode.")
+@click.option("--seed", default=42, help="Global random seed.")
 # fmt: on
 def train(
     epochs: int,
@@ -85,6 +91,7 @@ def train(
     num_devices: int,
     num_nodes: int,
     ckpt_path: str,
+    mode: str,
     seed: int,
 ) -> None:
     # save the config for wandb
@@ -104,6 +111,8 @@ def train(
         "num_devices": num_devices,
         "num_nodes": num_nodes,
         "ckpt_path": ckpt_path,
+        "mode": mode,
+        "seed": seed,
     }
 
     # seed everything for reproducibility
@@ -114,7 +123,10 @@ def train(
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     # generate the correct paths for the images and the annotation json
-    images_path = Path(data_path, "NWPU_images")
+    if device_type == 'cuda':
+        images_path = Path(data_path, "NWPU_images")
+    else:
+        images_path = Path(data_path)
     annotations_path = Path(data_path, "dataset_nwpu.json")
 
     print("Initalizing dataset...")
@@ -138,21 +150,11 @@ def train(
         transform=ToTensor(),
     )
 
-    print("Masking dataset...")
-    if debug:
-        train_set.set_empty_mask()
-        val_set.set_empty_mask()
-        test_set.set_empty_mask()
-
-        train_set.add_random_labels(100)
-        val_set.add_random_labels(100)
-        test_set.add_random_labels(100)
-
-    else:
-        # generate a random mask for the initial train set
-        train_set.set_empty_mask()
-        inital_elements = int(train_set.max_length() * init_set_size)
-        train_set.add_random_labels(inital_elements)
+    # print("Masking dataset...")
+    # generate a random mask for the initial train set
+    train_set.set_empty_mask()
+    initial_elements = int(train_set.max_length() * init_set_size)
+    init_set_labels = train_set.add_random_labels(initial_elements)
 
     # generate a string in the form of day-month-year-hour-minute for naming the wandb group
     date_time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")
@@ -169,21 +171,32 @@ def train(
     num_gpus = num_devices * num_nodes
 
     for cycle in range(max_cycles):
+        print(f"----- CYCLE {cycle} -----")
         early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
-
         prediction_writer = PredictionWriter(
-            write_interval="epoch", root_dir=str(prediction_path_root)
+            write_interval="epoch", root_dir=str(prediction_path), strategy=sample_method
         )
         wandb_run_name = f"{run_name}-{cycle}"
+        wandb.login(key=api_key)
 
-        # wandb_logger = WandbLogger(
-        #     project="active_learning",
-        #     config=config,
-        #     name=wandb_run_name,
-        #     group=group_name,
-        # )
+        if debug:
+            wandb_logger = WandbLogger(
+                mode="disabled",
+                project="active_learning",
+                config=config,
+                name=wandb_run_name,
+                group=group_name,
+            )
 
-        print("Setup Trainer ...")
+        else:
+            wandb_logger = WandbLogger(
+                project="active_learning",
+                config=config,
+                name=wandb_run_name,
+                group=group_name,
+            )
+
+        # print("Setup Trainer ...")
         trainer = pl.Trainer(
             callbacks=[prediction_writer, early_stopping_callback],
             accelerator=device_type,
@@ -196,11 +209,12 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            # logger=wandb_logger,
+            logger=wandb_logger,
+            num_sanity_val_steps=0,
         )
 
-        print("Loading model...")
-        model = ImageCaptioningSystem(learning_rate)
+        # print("Loading model...")
+        model = ImageCaptioningSystem(learning_rate, device_type, sample_method)
         prediction_writer.update_cycle(cycle)
 
         print("Get Dataloaders ...")
@@ -208,7 +222,7 @@ def train(
             batch_size, train_set=train_set, val_set=val_set
         )
 
-        print("Fit model ...")
+        print(f"Fit model on {len(train_set)} samples...")
         trainer.fit(
             model,
             train_dataloaders=train_loader,
@@ -216,9 +230,10 @@ def train(
             ckpt_path=ckpt_path,
         )
 
-        trainer.save_checkpoint(
-            f"/scratch/activelearning-ic/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
-        )
+        if not debug:
+            trainer.save_checkpoint(
+                f"/home/users/w/wallburg/merge/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
+            )
 
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
@@ -235,14 +250,14 @@ def train(
         #     wandb_logger.experiment.summary["val_meteor"] = mean_meteor
         #     wandb_logger.experiment.summary["cycle"] = cycle
 
-        #     wandb_logger.experiment.finish()
+        wandb_logger.experiment.finish()
 
         if cycle == max_cycles - 1:
             break
 
         elements_to_add = int(train_set.max_length() * new_data_size)
 
-        if sample_method == "random":            
+        if sample_method == "random":
             print("Adding random labels ...")
             train_set.add_random_labels(elements_to_add)
             continue
@@ -256,6 +271,9 @@ def train(
         train_set.flip_mask()
 
         unlabeled_prediction_path = prediction_writer.current_dir
+
+        if sample_method == 'confidence':
+            img_ids = strategies.confidence_sample(current_prediction_path, elements_to_add)
 
         if sample_method == "cluster":
 

@@ -10,6 +10,10 @@ testing.ipynb
 active_learning
 *cache*
 predictions
+secrets.txt
 nlgeval
 test.py
 results
+logs
+test.log
+checkpoints

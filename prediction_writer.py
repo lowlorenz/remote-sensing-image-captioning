@@ -5,9 +5,10 @@ from pathlib import Path
 
 
 class PredictionWriter(BasePredictionWriter):
-    def __init__(self, root_dir, write_interval):
+    def __init__(self, root_dir, write_interval, strategy):
         super().__init__(write_interval)
         self.root_dir = root_dir
+        self.strategy = strategy
         self.cycle = 0
         self.mode = "unlabeled"
 
@@ -36,13 +37,17 @@ class PredictionWriter(BasePredictionWriter):
         # [(img_emb, img_id), (img_emb, img_id), ...] to
         # ([img_emb, img_emb, ...], [img_id, img_id, ...])
         # from https://www.geeksforgeeks.org/python-unzip-a-list-of-tuples/
-        img_embeddings, img_ids, predicted_tokens = list(zip(*predictions[0]))
-        img_embeddings = torch.cat(img_embeddings, axis=0)
+        confidences, img_embeddings, img_ids, predicted_tokens = list(zip(*predictions[0]))
         img_ids = torch.cat(img_ids, axis=0)
-        predicted_tokens = torch.cat(predicted_tokens, axis=0)
+        if "confidence" in self.strategy:
+            confidences = torch.cat(confidences, axis=0)
+        if "cluster" in self.strategy:
+            img_embeddings = torch.cat(img_embeddings, axis=0)
+            predicted_tokens = torch.cat(predicted_tokens, axis=0)
 
         # this will create N (num processes) files in `output_dir` each containing
         # the predictions of it's respective rank
+        confidences_path = (self.current_dir/ f"confidences_rank_{trainer.global_rank}")
         img_embedding_path = (
             self.current_dir / f"img_embeddings_rank_{trainer.global_rank}"
         )
@@ -51,6 +56,7 @@ class PredictionWriter(BasePredictionWriter):
             self.current_dir / f"predicted_tokens_rank_{trainer.global_rank}"
         )
 
+        torch.save(confidences, str(confidences_path))
         torch.save(
             img_embeddings,
             str(img_embedding_path),

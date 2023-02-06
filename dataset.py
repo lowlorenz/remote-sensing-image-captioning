@@ -79,7 +79,7 @@ def tokenize_sentences(sentences):
 
 
 class NWPU_Captions(torch.utils.data.Dataset):
-    def __init__(self, root, annotations_file, split, transform=None):
+    def __init__(self, root, annotations_file, split, transform=None, seed=42):
         assert split in ["train", "val", "test"]
 
         annotations = read_annotations_file(root, annotations_file)[split]
@@ -94,6 +94,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.update_masked_arrays()
 
         self.transform = transform
+        self.seed = seed
 
         self.image_processor = ViTFeatureExtractor.from_pretrained(
             "nlpconnect/vit-gpt2-image-captioning"
@@ -135,6 +136,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
     def add_random_labels(self, num_elements):
         # Update the mask, set num elementes to true
         idx = np.argwhere(self.mask == False)
+        np.random.seed(self.seed)
         np.random.shuffle(idx)
         idx = idx[:num_elements]
         self.mask[idx] = True
