@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 from evaluation import eval_validation
 
 with open("secrets.txt", "r") as config_key:
-    api_key = config_key.readline().stri
+    api_key = config_key.readline().strip()
 
 
 def get_data_loaders(
@@ -176,6 +176,7 @@ def train(
         prediction_writer = PredictionWriter(
             write_interval="epoch", root_dir=str(prediction_path), strategy=sample_method
         )
+
         wandb_run_name = f"{run_name}-{cycle}"
         wandb.login(key=api_key)
 
@@ -198,7 +199,7 @@ def train(
 
         # print("Setup Trainer ...")
         trainer = pl.Trainer(
-            callbacks=[prediction_writer, early_stopping_callback],
+            callbacks=[prediction_writer],  # , early_stopping_callback],
             accelerator=device_type,
             devices=num_devices,
             strategy=strategy,
@@ -209,7 +210,7 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            logger=wandb_logger,
+            # logger=wandb_logger,
             num_sanity_val_steps=0,
         )
 
@@ -238,17 +239,17 @@ def train(
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
 
-        # if trainer.global_rank == 0:
-        #     val_prediction_path = prediction_writer.current_dir
-        #     reference_paths = [f"val_references_{i}.txt" for i in range(5)]
+        if trainer.global_rank == 0:
+            val_prediction_path = prediction_writer.current_dir
+            reference_paths = [f"val_references_{i}.txt" for i in range(5)]
 
-        #     mean_bleu, mean_meteor = eval_validation(
-        #         reference_paths, val_prediction_path
-        #     )
+            mean_bleu, mean_meteor = eval_validation(
+                reference_paths, val_prediction_path
+            )
 
-        #     wandb_logger.experiment.summary["val_bleu"] = mean_bleu
-        #     wandb_logger.experiment.summary["val_meteor"] = mean_meteor
-        #     wandb_logger.experiment.summary["cycle"] = cycle
+            wandb_logger.experiment.summary["val_bleu"] = mean_bleu
+            wandb_logger.experiment.summary["val_meteor"] = mean_meteor
+            wandb_logger.experiment.summary["cycle"] = cycle
 
         wandb_logger.experiment.finish()
 
