@@ -42,6 +42,13 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()
+        self.train_bleu = BLEUScore()
+        self.val_bleu = BLEUScore()
+        self.train_rouge = ROUGEScore()
+        self.val_rouge = ROUGEScore()
+        self.train_meteor = []
+        self.val_meteor = []
+        self.max_tokens = 56
 
     def forward(self, x):
         return self.model(x)
