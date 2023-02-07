@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH -J random 
-#SBATCH -o /home/users/w/wallburg/merge/logs/random.log
-#SBATCH -D /home/users/w/wallburg/merge/
+#SBATCH -o /home/users/w/wallburg/dif_log/logs/random.log
+#SBATCH -D /home/users/w/wallburg/dif_log/
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-gpu=48G
 #SBATCH --cpus-per-task=16
 #SBATCH --partition=gpu
-#SBATCH --time=12:00:00
+#SBATCH --time=08:00:00
 
 # set up proxy (no internet on nodes)
 if [ ! "$HOSTNAME" == "frontend*" ]; then

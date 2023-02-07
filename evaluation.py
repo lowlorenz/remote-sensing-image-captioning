@@ -10,16 +10,16 @@ from pathlib import Path
 from transformers import GPT2TokenizerFast
 
 
-if "downloaded" not in locals():
-
-    nltk.download("wordnet")
-    nltk.download("punkt")
-
-    tokenizer = GPT2TokenizerFast.from_pretrained(
-        "nlpconnect/vit-gpt2-image-captioning"
-    )
-
-    downloaded = True
+# if "downloaded" not in locals():
+# 
+#     nltk.download("wordnet")
+#     nltk.download("punkt")
+# 
+#     tokenizer = GPT2TokenizerFast.from_pretrained(
+#         "nlpconnect/vit-gpt2-image-captioning"
+#     )
+#
+#     downloaded = True
 
 
 def meteor(references: List[str], hypothesis: str):

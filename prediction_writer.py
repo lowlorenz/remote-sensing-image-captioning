@@ -37,10 +37,11 @@ class PredictionWriter(BasePredictionWriter):
         # [(img_emb, img_id), (img_emb, img_id), ...] to
         # ([img_emb, img_emb, ...], [img_id, img_id, ...])
         # from https://www.geeksforgeeks.org/python-unzip-a-list-of-tuples/
-        confidences, img_embeddings, img_ids, predicted_tokens = list(zip(*predictions[0]))
+        confidences, margins, img_embeddings, img_ids, predicted_tokens = list(zip(*predictions[0]))
         img_ids = torch.cat(img_ids, axis=0)
         if "confidence" in self.strategy:
             confidences = torch.cat(confidences, axis=0)
+            margins = torch.cat(margins, axis=0)
         if "cluster" in self.strategy:
             img_embeddings = torch.cat(img_embeddings, axis=0)
             predicted_tokens = torch.cat(predicted_tokens, axis=0)
@@ -48,6 +49,7 @@ class PredictionWriter(BasePredictionWriter):
         # this will create N (num processes) files in `output_dir` each containing
         # the predictions of it's respective rank
         confidences_path = (self.current_dir/ f"confidences_rank_{trainer.global_rank}")
+        margins_path = (self.current_dir/ f"margins_rank_{trainer.global_rank}")
         img_embedding_path = (
             self.current_dir / f"img_embeddings_rank_{trainer.global_rank}"
         )
@@ -57,9 +59,7 @@ class PredictionWriter(BasePredictionWriter):
         )
 
         torch.save(confidences, str(confidences_path))
-        torch.save(
-            img_embeddings,
-            str(img_embedding_path),
-        )
+        torch.save(margins, str(margins_path))
+        torch.save(img_embeddings, str(img_embedding_path))
         torch.save(img_ids, str(img_ids_path))
         torch.save(predicted_tokens, str(predicted_tokens_path))

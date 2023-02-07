@@ -74,6 +74,7 @@ def get_data_loaders(
 @click.option("--ckpt_path", default=None, help="Path to checkpoint to resume training.")
 @click.option("--mode", default="train", help="Choose between train and test mode.")
 @click.option("--seed", default=42, help="Global random seed.")
+@click.option("--conf_mode", default="least", help="Whether to sample based on \"least\" confidence or \"margin\" of confidence")
 # fmt: on
 def train(
     epochs: int,
@@ -93,6 +94,7 @@ def train(
     ckpt_path: str,
     mode: str,
     seed: int,
+    conf_mode: str,
 ) -> None:
     # save the config for wandb
     config = {
@@ -113,6 +115,7 @@ def train(
         "ckpt_path": ckpt_path,
         "mode": mode,
         "seed": seed,
+        "conf_mode": conf_mode,
     }
 
     # seed everything for reproducibility
@@ -174,22 +177,22 @@ def train(
         print(f"----- CYCLE {cycle} -----")
         early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
         prediction_writer = PredictionWriter(
-            write_interval="epoch", root_dir=str(prediction_path), strategy=sample_method
+            write_interval="epoch", root_dir=str(prediction_path_root), strategy=sample_method
         )
 
         wandb_run_name = f"{run_name}-{cycle}"
         wandb.login(key=api_key)
 
-        if debug:
-            wandb_logger = WandbLogger(
-                mode="disabled",
-                project="active_learning",
-                config=config,
-                name=wandb_run_name,
-                group=group_name,
-            )
+        # if debug:
+        #     wandb_logger = WandbLogger(
+        #         mode="disabled",
+        #         project="active_learning",
+        #       config=config,
+        #         name=wandb_run_name,
+        #         group=group_name,
+        #     )
 
-        else:
+        if True:
             wandb_logger = WandbLogger(
                 project="active_learning",
                 config=config,
@@ -210,7 +213,7 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            # logger=wandb_logger,
+            logger=wandb_logger,
             num_sanity_val_steps=0,
         )
 
@@ -238,7 +241,8 @@ def train(
 
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
-
+        wandb_logger.experiment.finish()
+        """
         if trainer.global_rank == 0:
             val_prediction_path = prediction_writer.current_dir
             reference_paths = [f"val_references_{i}.txt" for i in range(5)]
@@ -250,8 +254,7 @@ def train(
             wandb_logger.experiment.summary["val_bleu"] = mean_bleu
             wandb_logger.experiment.summary["val_meteor"] = mean_meteor
             wandb_logger.experiment.summary["cycle"] = cycle
-
-        wandb_logger.experiment.finish()
+        """
 
         if cycle == max_cycles - 1:
             break
@@ -274,7 +277,7 @@ def train(
         unlabeled_prediction_path = prediction_writer.current_dir
 
         if sample_method == 'confidence':
-            img_ids = strategies.confidence_sample(current_prediction_path, elements_to_add)
+            img_ids = strategies.confidence_sample(unlabeled_prediction_path, elements_to_add, conf_mode)
 
         if sample_method == "cluster":
 

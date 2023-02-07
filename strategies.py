@@ -15,25 +15,30 @@ gpt_tokenizer = GPT2TokenizerFast.from_pretrained(
     "nlpconnect/vit-gpt2-image-captioning"
 )
 
-def confidence_sample(path, elems_to_add):
+def confidence_sample(path, elems_to_add, mode="least"):
     # load image embeddings
     confidence_files = os.listdir(path)
-    confidence_files = [
-        file for file in confidence_files if file.startswith("confidence")
-    ]
-    confidences = torch.cat([torch.load(Path(path, file)) for file in confidence_files], axis=0)
+    if mode == "least":
+        confidence_files = [f for f in confidence_files if f.startswith("confidence")]
+    if mode == "margin":
+        confidence_files = [f for f in confidence_files if f.startswith("margin")]
+    confidences = torch.cat([torch.load(Path(path, f)) for f in confidence_files], axis=0)
 
     confidences = confidences.flatten()
     confidences = list(confidences.detach().cpu())
 
     id_files = os.listdir(path)
-    id_files = [file for file in id_files if file.startswith("img_ids")]
-    ids = torch.cat([torch.load(Path(path, file)) for file in id_files], axis=0)
+    id_files = [f for f in id_files if f.startswith("img_ids")]
+    ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
     ids = ids.flatten()
     ids = ids.detach().cpu()
     joint_list = [a for a in zip(confidences, ids)]
-    joint_list.sort(key=lambda l: l[0])
+    if mode == "least":
+        joint_list.sort(key=lambda l: l[0])
+    if mode == "margin":
+        joint_list.sort(reverse=True, key=lambda l: l[0])
     returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
+    print(returned_ids[:20])
 
     return torch.tensor(returned_ids)
 

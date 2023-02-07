@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 import torch
 from transformers import GPT2TokenizerFast, VisionEncoderDecoderModel
 from torchmetrics import BLEUScore
+from nltk.translate import bleu_score
 from torchmetrics.text.rouge import ROUGEScore
 from nltk.translate.meteor_score import meteor_score as meteor
 from nltk import word_tokenize, download
@@ -42,12 +43,13 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()
-        self.train_bleu = BLEUScore()
-        self.val_bleu = BLEUScore()
+        self.train_bleu = []
+        self.val_bleu = []
         self.train_rouge = ROUGEScore()
         self.val_rouge = ROUGEScore()
         self.train_meteor = []
         self.val_meteor = []
+        self.chencherry = bleu_score.SmoothingFunction()
         self.max_tokens = 56
 
     def forward(self, x):
@@ -101,11 +103,11 @@ class ImageCaptioningSystem(pl.LightningModule):
         captions = self.tokenizer.batch_decode(
             logits.argmax(dim=-1), skip_special_tokens=True
         )
-
-        # for i in range(len(captions)):
-        #     self.train_bleu(captions[i], [sentences_text[i]])
-        #     self.train_rouge(captions[i], [sentences_text[i]])
-        #     self.train_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
+        for i in range(len(captions)):
+            # self.train_bleu.append(bleu_score.sentence_bleu([e.split() for e in sentences_text[i]], captions[i].split()))
+            self.train_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
+            self.train_rouge(captions[i], [sentences_text[i]])
+            self.train_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
@@ -126,24 +128,24 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return loss
 
-    # def training_epoch_end(self, outputs):
-        # if self.global_rank != 0:
-        #     return
-        #
-        # train_bleu = self.train_bleu.compute()
-        # self.log("train/bleu", train_bleu, on_epoch=True)
-        # train_rouge = self.train_rouge.compute()
-        # self.log("train/rouge", train_rouge, on_epoch=True)
-        # train_meteor = stats.mean(self.train_meteor)
-        # self.log("train/meteor", train_meteor, on_epoch=True)
-        #
-        # self.logger.log_text(
-        #     key="examples/train", dataframe=self.train_examples, step=self.global_step
-        # )
-        #
-        # self.train_meteor = []
-        # self.train_rouge.reset()
-        # self.train_bleu.reset()
+    def training_epoch_end(self, outputs):
+        if self.global_rank != 0:
+            return
+       
+        train_bleu = stats.mean(self.train_bleu)
+        self.log("train/bleu", train_bleu, on_epoch=True)
+        train_rouge = self.train_rouge.compute()
+        self.log("train/rouge", train_rouge, on_epoch=True)
+        train_meteor = stats.mean(self.train_meteor)
+        self.log("train/meteor", train_meteor, on_epoch=True)
+        
+        self.logger.log_text(
+            key="examples/train", dataframe=self.train_examples, step=self.global_step
+        )
+       
+        self.train_meteor = []
+        self.train_rouge.reset()
+        self.train_bleu = []
 
     def validation_step(self, batch, batch_idx):
         # prepare inputs
@@ -208,6 +210,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
         sentence_conf = None
+        sentence_margin = None
         image_embeddings = None
         predicted_tokens = None
         pixel_values, sentences_token, img_ids, sentences_ids = batch
@@ -218,12 +221,18 @@ class ImageCaptioningSystem(pl.LightningModule):
         with torch.no_grad():
             # Confidence
             if "conf" in self.method:
-                out = self.model(pixel_values=pixel_values, labels=empty_label, output_hidden_states=True)
+                out = self.model(pixel_values=pixel_values, labels=label, output_hidden_states=True)
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
                 sentence_conf = torch.mean(word_conf, dim=1)
                 assert torch.numel(sentence_conf) == bs
+                top_conf, _ = torch.topk(logits_softmax, 2, dim=2)
+                # word_margin = top_conf[:,0] - top_conf[:,1]
+                # assert word_margin.ndim == 1, print(word_margin.shape)
+                # sentence_margin = torch.mean(word_margin, dim=1)
+                # TODO
+                sentence_margin = sentence_conf 
             # Image diversity
             if "cluster" in self.method:
                 image_embeddings = self.model.encoder(
@@ -233,7 +242,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
                 predicted_tokens = logits.argmax(dim=-1)
 
-        return sentence_conf, image_embeddings, img_ids, predicted_tokens
+        return sentence_conf, sentence_margin, image_embeddings, img_ids, predicted_tokens
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
