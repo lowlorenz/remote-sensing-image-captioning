@@ -1,23 +1,26 @@
-from dataset import NWPU_Captions
-from torchvision.transforms import ToTensor
-from model import ImageCaptioningSystem
-import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from prediction_writer import PredictionWriter
-import torch
-from torch.utils.data import DataLoader
 import click
-import wandb
-import datetime
-import strategies
-import os
-from pathlib import Path
-from sklearn.model_selection import train_test_split
-from evaluation import eval_validation
 
-with open("secrets.txt", "r") as config_key:
-    api_key = config_key.readline().strip()
+if __name__ == "__main__":
+    from dataset import NWPU_Captions
+    from torchvision.transforms import ToTensor
+    from model import ImageCaptioningSystem
+    import pytorch_lightning as pl
+    from pytorch_lightning.loggers import WandbLogger
+    from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+    from prediction_writer import PredictionWriter
+    import torch
+    from torch.utils.data import DataLoader
+    import wandb
+    import datetime
+    import strategies
+    import os
+    from pathlib import Path
+    from sklearn.model_selection import train_test_split
+    from evaluation import eval_validation
+
+
+# with open("secrets.txt", "r") as config_key:
+#     api_key = config_key.readline().strip()
 
 
 def get_data_loaders(
@@ -75,6 +78,7 @@ def get_data_loaders(
 @click.option("--mode", default="train", help="Choose between train and test mode.")
 @click.option("--seed", default=42, help="Global random seed.")
 @click.option("--conf_mode", default="least", help="Whether to sample based on \"least\" confidence or \"margin\" of confidence")
+@click.option("--cluster_mode", default="image", help="Whether to use the image or text embeddings for clustering")
 # fmt: on
 def train(
     epochs: int,
@@ -95,6 +99,7 @@ def train(
     mode: str,
     seed: int,
     conf_mode: str,
+    cluster_mode: str,
 ) -> None:
     # save the config for wandb
     config = {
@@ -126,7 +131,7 @@ def train(
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     # generate the correct paths for the images and the annotation json
-    if device_type == 'cuda':
+    if device_type == "cuda":
         images_path = Path(data_path, "NWPU_images")
     else:
         images_path = Path(data_path)
@@ -177,11 +182,13 @@ def train(
         print(f"----- CYCLE {cycle} -----")
         early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
         prediction_writer = PredictionWriter(
-            write_interval="epoch", root_dir=str(prediction_path_root), strategy=sample_method
+            write_interval="epoch",
+            root_dir=str(prediction_path_root),
+            strategy=sample_method,
         )
 
         wandb_run_name = f"{run_name}-{cycle}"
-        wandb.login(key=api_key)
+        # wandb.login(key=api_key)
 
         # if debug:
         #     wandb_logger = WandbLogger(
@@ -242,19 +249,6 @@ def train(
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
         wandb_logger.experiment.finish()
-        """
-        if trainer.global_rank == 0:
-            val_prediction_path = prediction_writer.current_dir
-            reference_paths = [f"val_references_{i}.txt" for i in range(5)]
-
-            mean_bleu, mean_meteor = eval_validation(
-                reference_paths, val_prediction_path
-            )
-
-            wandb_logger.experiment.summary["val_bleu"] = mean_bleu
-            wandb_logger.experiment.summary["val_meteor"] = mean_meteor
-            wandb_logger.experiment.summary["cycle"] = cycle
-        """
 
         if cycle == max_cycles - 1:
             break
@@ -276,19 +270,30 @@ def train(
 
         unlabeled_prediction_path = prediction_writer.current_dir
 
-        if sample_method == 'confidence':
-            img_ids = strategies.confidence_sample(unlabeled_prediction_path, elements_to_add, conf_mode)
+        if sample_method == "confidence":
+            img_ids = strategies.confidence_sample(
+                unlabeled_prediction_path, elements_to_add, conf_mode
+            )
 
-        if sample_method == "cluster":
+        elif sample_method == "cluster":
 
             img_ids = strategies.diversity_based_sample(
                 path=unlabeled_prediction_path,
                 num_clusters=elements_to_add,
-                type="image",
+                type=cluster_mode,
                 expected_num_files=num_gpus,
             )
 
-            train_set.add_labels_by_img_id(img_ids)
+        elif sample_method == "confidence+cluster":
+            img_ids = strategies.confidence_then_cluster_sample(
+                path=unlabeled_prediction_path,
+                elems_to_add=elements_to_add,
+                cluster_mode=cluster_mode,
+                condfidence_mode=conf_mode,
+                expected_num_files=num_gpus,
+            )
+
+        train_set.add_labels_by_img_id(img_ids)
 
 
 if __name__ == "__main__":

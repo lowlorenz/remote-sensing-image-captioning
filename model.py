@@ -105,10 +105,17 @@ class ImageCaptioningSystem(pl.LightningModule):
         )
 
         for i in range(len(captions)):
-            self.train_bleu.append(bleu_score.sentence_bleu(sentences_text[i], captions[i][0]))
+            self.train_bleu.append(
+                bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
+            )
             # self.train_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
             self.train_rouge(captions[i], [sentences_text[i]])
-            self.train_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
+            self.train_meteor.append(
+                meteor(
+                    [word_tokenize(e) for e in sentences_text[i]],
+                    word_tokenize(captions[i]),
+                )
+            )
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
@@ -172,10 +179,17 @@ class ImageCaptioningSystem(pl.LightningModule):
         )
 
         for i in range(len(captions)):
-            self.val_bleu.append(bleu_score.sentence_bleu(sentences_text[i], captions[i][0]))
+            self.val_bleu.append(
+                bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
+            )
             # self.val_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
             self.val_rouge(captions[i], [sentences_text[i]])
-            self.val_meteor.append(meteor([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i])))
+            self.val_meteor.append(
+                meteor(
+                    [word_tokenize(e) for e in sentences_text[i]],
+                    word_tokenize(captions[i]),
+                )
+            )
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
@@ -223,7 +237,9 @@ class ImageCaptioningSystem(pl.LightningModule):
         with torch.no_grad():
             # Confidence
             if "conf" in self.method:
-                out = self.model(pixel_values=pixel_values, labels=label, output_hidden_states=True)
+                out = self.model(
+                    pixel_values=pixel_values, labels=label, output_hidden_states=True
+                )
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
@@ -244,7 +260,13 @@ class ImageCaptioningSystem(pl.LightningModule):
 
                 predicted_tokens = logits.argmax(dim=-1)
 
-        return sentence_conf, sentence_margin, image_embeddings, img_ids, predicted_tokens
+        return (
+            sentence_conf,
+            sentence_margin,
+            image_embeddings,
+            img_ids,
+            predicted_tokens,
+        )
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

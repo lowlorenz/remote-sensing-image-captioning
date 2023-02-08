@@ -144,10 +144,20 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.update_masked_arrays()
 
     def add_labels_by_img_id(self, query: torch.Tensor):
+        # query are the tensors that should be added to the mask
+        # it is unsqueezed to make it a 2D tensor from [query1, query2 ....]  to [[query1], [query2], ...]
         query = query.unsqueeze(dim=1)
+        # ids are all of the image ids in the dataset
         ids = torch.tensor(self.img_ids)
+        # compare [id1, id2, id3, ...] with [[query1], [query2]...] row wise.
+        # if any id is equal to the query, one element in the (ids == query) array row is true at the specific index so it looks like:
+        # [ [False, False, True], 
+        #   [True,  False, False] ]  if the query is [id3, id1]
+        # then it is reduced to [True, False, True] by taking the any() of the columns
         mask = (ids == query).any(dim=0).numpy()
+        # add the mask to the current mask
         self.mask = mask + self.mask
+        # update the masked arrays
         self.update_masked_arrays()
 
     def set_empty_mask(self):
