@@ -73,6 +73,7 @@ def load_text_embeddings(
 
     ids = torch.cat([torch.load(Path(path, file)) for file in id_files], axis=0)
     ids = ids.detach().cpu().numpy()
+    embeddings = embeddings.detach().cpu().numpy()
 
     return embeddings, ids
 
@@ -187,5 +188,13 @@ def diversity_based_sample(
     cluster = KMeans(n_clusters=num_clusters, random_state=0).fit(embeddings)
     label = cluster.labels_
 
-    selected_ids = [np.random.choice(ids[label == i]) for i in range(num_clusters)]
+    selected_ids = []
+    for i in range(num_clusters):
+        cluster_members = ids[label == i]
+
+        if len(cluster_members) == 0:
+            print('Cluster is empty, selecting no entry', embeddings.shape, ids.shape, label.shape, num_clusters)
+            continue
+
+        selected_ids.append(np.random.choice(cluster_members))
     return torch.tensor(selected_ids)
