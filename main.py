@@ -19,7 +19,6 @@ from evaluation import eval_validation
 with open("secrets.txt", "r") as config_key:
     api_key = config_key.readline().strip()
 
-
 def get_data_loaders(
     batch_size, train_set=None, val_set=None, test_set=None, unlabeled_set=None
 ):

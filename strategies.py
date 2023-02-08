@@ -8,30 +8,40 @@ import time
 from transformers import GPT2TokenizerFast, BertTokenizer, BertModel
 
 
-bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-bert = BertModel.from_pretrained("bert-base-uncased")
+def get_tokenizer():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-gpt_tokenizer = GPT2TokenizerFast.from_pretrained(
-    "nlpconnect/vit-gpt2-image-captioning"
-)
+    bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    bert = BertModel.from_pretrained("bert-base-uncased").to(device)
 
-def confidence_sample(path, elems_to_add, mode="least"):
-    # load image embeddings
-    confidence_files = os.listdir(path)
-    if mode == "least":
-        confidence_files = [f for f in confidence_files if f.startswith("confidence")]
-    if mode == "margin":
-        confidence_files = [f for f in confidence_files if f.startswith("margin")]
-    confidences = torch.cat([torch.load(Path(path, f)) for f in confidence_files], axis=0)
+    gpt_tokenizer = GPT2TokenizerFast.from_pretrained(
+        "nlpconnect/vit-gpt2-image-captioning"
+    )
 
-    confidences = confidences.flatten()
-    confidences = list(confidences.detach().cpu())
+    return bert, bert_tokenizer, gpt_tokenizer, device
 
+def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
+    # Load IDs
     id_files = os.listdir(path)
     id_files = [f for f in id_files if f.startswith("img_ids")]
     ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
     ids = ids.flatten()
     ids = ids.detach().cpu()
+    if cluster_ids is not None:
+        mask = np.isin(ids, conf_ids.numpy())
+    else:
+        mask = np.full(ids.shape, True)
+
+    # Load confidence values
+    confidence_files = os.listdir(path)
+    if mode == "least":
+        confidence_files = [f for f in confidence_files if f.startswith("confidence")][mask]
+    if mode == "margin":
+        confidence_files = [f for f in confidence_files if f.startswith("margin")][mask]
+    confidences = torch.cat([torch.load(Path(path, f)) for f in confidence_files], axis=0)
+    confidences = confidences.flatten()
+    confidences = list(confidences.detach().cpu())
+
     joint_list = [a for a in zip(confidences, ids)]
     if mode == "least":
         joint_list.sort(key=lambda l: l[0])
@@ -42,10 +52,32 @@ def confidence_sample(path, elems_to_add, mode="least"):
     return torch.tensor(returned_ids)
 
 
-def conf_and_cluster(path, elems_to_add, type="image"):
+def conf_and_cluster(path, elems_to_add, expected_num_files, type="image", mode="least"):
     # Select least confident data points
-    least_conf_ids = confidence_sample(path, elems_to_add*4)
-    returned_ids = diversity_based_sample(path, elems_to_add, type, least_conf_ids)
+    least_conf_ids = confidence_sample(path, elems_to_add*4, mode)
+    # Cluster
+    returned_ids = diversity_based_sample(
+        path=path,
+        num_clusters=elems_to_add,
+        type=type,
+        expected_num_files=expected_num_files,
+        conf_ids=least_conf_ids,
+    )
+
+    return torch.tensor(returned_ids)
+
+def cluster_and_conf(path, elems_to_add, expected_num_files, type="image", mode="least"):
+    # Cluster
+    cluster_ids = diversity_based_sample(
+        path=path,
+        num_clusters=elems_to_add,
+        type=type,
+        expected_num_files=expected_num_files,
+        conf_ids=least_conf_ids,
+    )
+    # Select least confident data points
+    returned_ids = confidence_sample(path, elems_to_add * 4, mode, cluster_ids)
+
     return torch.tensor(returned_ids)
 
 def load_embeddings(
@@ -59,6 +91,12 @@ def load_embeddings(
     elif type == "text":
         return load_text_embeddings(path, expected_num_files)
 
+    if conf_ids is not None:
+        mask = np.isin(ids, conf_ids.numpy())
+        ids = ids[mask]
+        embeddings = embeddings[mask]
+
+    return embeddings, ids
 
 def load_text_embeddings(
     path: str,
@@ -105,14 +143,12 @@ def load_image_embeddings(
         embedding_files = [
             file for file in embedding_files if file.startswith("img_embeddings")
         ]
-        if conf_ids is not None:
-            id_files = os.listdir(path)
-            id_files = [file for file in id_files if file.startswith("img_ids")]
-        else:
-            id_files = conf_ids
 
-        # if len(embedding_files) == expected_num_files:
-        #     break
+        id_files = os.listdir(path)
+        id_files = [file for file in id_files if file.startswith("img_ids")]
+
+        if len(embedding_files) == expected_num_files:
+            break
 
         time.sleep(0.1)
 
@@ -134,8 +170,9 @@ def diversity_based_sample(
     num_clusters: int,
     type: str,
     expected_num_files: int,
+    conf_ids: torch.tensor = None,
 ):
-    embeddings, ids = load_embeddings(path, type, expected_num_files)
+    embeddings, ids = load_embeddings(path, type, expected_num_files, conf_ids)
 
     cluster = KMeans(n_clusters=num_clusters, random_state=0).fit(embeddings)
     label = cluster.labels_
