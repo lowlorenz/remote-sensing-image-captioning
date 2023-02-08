@@ -167,8 +167,8 @@ def train(
     prediction_path_root.mkdir(parents=True, exist_ok=True)
 
     strategy = "ddp" if num_devices > 1 or num_nodes > 1 else None
-    limit_train_batches = 32 if debug else None
-    limit_val_batches = 32 if debug else None
+    limit_train_batches = 10 if debug else None
+    limit_val_batches = 10 if debug else None
     log_every_n_steps = 8  # if debug else 50
 
     num_gpus = num_devices * num_nodes

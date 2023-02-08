@@ -15,5 +15,5 @@ nlgeval
 test.py
 results
 logs
-test.log
+.log
 checkpoints
