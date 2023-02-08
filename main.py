@@ -78,6 +78,7 @@ def get_data_loaders(
 @click.option("--seed", default=42, help="Global random seed.")
 @click.option("--conf_mode", default="least", help="Whether to sample based on \"least\" confidence or \"margin\" of confidence")
 @click.option("--cluster_mode", default="image", help="Whether to use the image or text embeddings for clustering")
+@click.option("--mutliple_sentence_loss", is_flag=True, help="Whether to use the image or text embeddings for clustering")
 # fmt: on
 def train(
     epochs: int,
@@ -99,6 +100,7 @@ def train(
     seed: int,
     conf_mode: str,
     cluster_mode: str,
+    mutliple_sentence_loss:bool,
 ) -> None:
     # save the config for wandb
     config = {
@@ -120,6 +122,7 @@ def train(
         "mode": mode,
         "seed": seed,
         "conf_mode": conf_mode,
+        "mutliple_sentence_loss": mutliple_sentence_loss
     }
 
     # seed everything for reproducibility
@@ -224,7 +227,7 @@ def train(
         )
 
         # print("Loading model...")
-        model = ImageCaptioningSystem(learning_rate, device_type, sample_method)
+        model = ImageCaptioningSystem(learning_rate, device_type, sample_method, mutliple_sentence_loss)
         prediction_writer.update_cycle(cycle)
 
         print("Get Dataloaders ...")
@@ -242,7 +245,7 @@ def train(
 
         if not debug:
             trainer.save_checkpoint(
-                f"/home/users/w/wallburg/merge/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
+                f"/scratch/activelearning-ic/{run_name}-{date_time_str}-{cycle}.ckpt"
             )
 
         prediction_writer.update_mode("val")

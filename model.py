@@ -37,6 +37,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         self.device_type = device_type
         self.method = sampling_method
+        self.mutliple_sentence_loss = mutliple_sentence_loss
 
         self.train_examples = pd.DataFrame(
             columns=["epoch", "step", "truth", "prediction"]
@@ -56,11 +57,11 @@ class ImageCaptioningSystem(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    def calculate_loss(self, pixel_values, tokens, multiple_sentences=True):
+    def calculate_loss(self, pixel_values, tokens):
         """calculate loss for a sentence - similar to the implementation of the model
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/vision_encoder_decoder/modeling_vision_encoder_decoder.py#L628
         """
-        if multiple_sentences:
+        if self.mutliple_sentence_loss:
             label = tokens[:, 0, :].long().contiguous()
             output = self.model(pixel_values=pixel_values, labels=label)
 
@@ -77,6 +78,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         else:
             index = random.randint(0, 4)
             label = tokens[:,index,:].squeeze().long().contiguous()
+            # print(label.shape, pixel_values.shape, index, tokens.shape)
             output = self.model(pixel_values=pixel_values, labels=label)
             loss = output.loss
             logits = output.logits
