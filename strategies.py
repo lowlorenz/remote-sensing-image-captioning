@@ -33,10 +33,11 @@ def load_embeddings(
         embeddings, ids = load_text_embeddings(path, expected_num_files)
 
     if conf_ids is not None:
-        mask = torch.isin(ids, conf_ids)
+        mask = np.isin(ids, conf_ids.numpy())
         ids = ids[mask]
         embeddings = embeddings[mask]
 
+    return embeddings, ids
 
 def load_text_embeddings(
     path: str,

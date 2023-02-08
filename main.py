@@ -1,22 +1,21 @@
 import click
 
-if __name__ == "__main__":
-    from dataset import NWPU_Captions
-    from torchvision.transforms import ToTensor
-    from model import ImageCaptioningSystem
-    import pytorch_lightning as pl
-    from pytorch_lightning.loggers import WandbLogger
-    from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-    from prediction_writer import PredictionWriter
-    import torch
-    from torch.utils.data import DataLoader
-    import wandb
-    import datetime
-    import strategies
-    import os
-    from pathlib import Path
-    from sklearn.model_selection import train_test_split
-    from evaluation import eval_validation
+from dataset import NWPU_Captions
+from torchvision.transforms import ToTensor
+from model import ImageCaptioningSystem
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from prediction_writer import PredictionWriter
+import torch
+from torch.utils.data import DataLoader
+import wandb
+import datetime
+import strategies
+import os
+from pathlib import Path
+from sklearn.model_selection import train_test_split
+from evaluation import eval_validation
 
 
 # with open("secrets.txt", "r") as config_key:

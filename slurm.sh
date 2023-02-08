@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH -J test_gpu_pytorch
-#SBATCH -o /home/users/l/lorenz-08-15/activelearning_ic/cluster_outputs/random_2.log
+#SBATCH -o /home/users/l/lorenz-08-15/activelearning_ic/cluster_outputs/conf+cluster_0.log
 #SBATCH -D /home/users/l/lorenz-08-15/activelearning_ic/
-#SBATCH --nodes=2
-#SBATCH --gres=gpu:2
-#SBATCH --ntasks-per-node=2
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-gpu=64G
 #SBATCH --cpus-per-task=16
 #SBATCH --partition=gpu_short
@@ -24,4 +24,4 @@ fi
 module load nvidia/cuda/11.2
 
 # srun python mnist.py
-srun python main.py --batch_size 12 --max_cycles 9 --epochs 10 --run_name random_2 --num_devices 2 --num_nodes 2 --sample_method random --seed 2
+srun python main.py --debug --batch_size 12 --max_cycles 2 --epochs 2 --run_name conf+cluster --num_devices 1 --num_nodes 1 --sample_method confidence+cluster --seed 0

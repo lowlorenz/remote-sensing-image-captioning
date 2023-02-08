@@ -14,6 +14,7 @@ import functools
 from pytorch_lightning.utilities import rank_zero_only
 from typing import Any, List
 import statistics as stats
+import random
 
 # download('punkt')
 # download('wordnet')
@@ -21,7 +22,7 @@ import statistics as stats
 
 
 class ImageCaptioningSystem(pl.LightningModule):
-    def __init__(self, lr, device_type: str, sampling_method):
+    def __init__(self, lr:float, device_type: str, sampling_method:str, mutliple_sentence_loss:bool):
         super().__init__()
         """_summary_
         """
@@ -55,22 +56,30 @@ class ImageCaptioningSystem(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    def calculate_loss(self, pixel_values, tokens):
+    def calculate_loss(self, pixel_values, tokens, multiple_sentences=True):
         """calculate loss for a sentence - similar to the implementation of the model
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/vision_encoder_decoder/modeling_vision_encoder_decoder.py#L628
         """
-        label = tokens[:, 0, :].long().contiguous()
-        output = self.model(pixel_values=pixel_values, labels=label)
+        if multiple_sentences:
+            label = tokens[:, 0, :].long().contiguous()
+            output = self.model(pixel_values=pixel_values, labels=label)
 
-        logits = output.logits
-        loss = output.loss
+            logits = output.logits
+            loss = output.loss
 
-        inputs = logits.reshape(-1, self.model.decoder.config.vocab_size)
+            inputs = logits.reshape(-1, self.model.decoder.config.vocab_size)
 
-        for i in range(1, 5):
-            label = tokens[:, i, :].squeeze().long().reshape(-1)
-            _loss = self.cross_entropy(inputs, label)
-            loss += _loss
+            for i in range(1, 5):
+                label = tokens[:, i, :].squeeze().long().reshape(-1)
+                _loss = self.cross_entropy(inputs, label)
+                loss += _loss
+
+        else:
+            index = random.randint(0, 4)
+            label = tokens[:,index,:].squeeze().long().contiguous()
+            output = self.model(pixel_values=pixel_values, labels=label)
+            loss = output.loss
+            logits = output.logits
 
         return loss, logits
 
@@ -104,18 +113,18 @@ class ImageCaptioningSystem(pl.LightningModule):
             logits.argmax(dim=-1), skip_special_tokens=True
         )
 
-        for i in range(len(captions)):
-            self.train_bleu.append(
-                bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
-            )
-            # self.train_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
-            self.train_rouge(captions[i], [sentences_text[i]])
-            self.train_meteor.append(
-                meteor(
-                    [word_tokenize(e) for e in sentences_text[i]],
-                    word_tokenize(captions[i]),
-                )
-            )
+        # for i in range(len(captions)):
+        #     self.train_bleu.append(
+        #         bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
+        #     )
+        #     # self.train_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
+        #     self.train_rouge(captions[i], [sentences_text[i]])
+        #     self.train_meteor.append(
+        #         meteor(
+        #             [word_tokenize(e) for e in sentences_text[i]],
+        #             word_tokenize(captions[i]),
+        #         )
+        #     )
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
@@ -140,20 +149,20 @@ class ImageCaptioningSystem(pl.LightningModule):
         if self.global_rank != 0:
             return
 
-        train_bleu = stats.mean(self.train_bleu)
-        self.log("train/bleu", train_bleu, on_epoch=True)
-        train_rouge = self.train_rouge.compute()
-        self.log("train/rouge", train_rouge, on_epoch=True)
-        train_meteor = stats.mean(self.train_meteor)
-        self.log("train/meteor", train_meteor, on_epoch=True)
+        # train_bleu = stats.mean(self.train_bleu)
+        # self.log("train/bleu", train_bleu, on_epoch=True)
+        # train_rouge = self.train_rouge.compute()
+        # self.log("train/rouge", train_rouge, on_epoch=True)
+        # train_meteor = stats.mean(self.train_meteor)
+        # self.log("train/meteor", train_meteor, on_epoch=True)
 
         self.logger.log_text(
             key="examples/train", dataframe=self.train_examples, step=self.global_step
         )
 
-        self.train_meteor = []
-        self.train_rouge.reset()
-        self.train_bleu = []
+        # self.train_meteor = []
+        # self.train_rouge.reset()
+        # self.train_bleu = []
 
     def validation_step(self, batch, batch_idx):
         # prepare inputs
@@ -178,18 +187,18 @@ class ImageCaptioningSystem(pl.LightningModule):
             logits.argmax(dim=-1), skip_special_tokens=True
         )
 
-        for i in range(len(captions)):
-            self.val_bleu.append(
-                bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
-            )
-            # self.val_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
-            self.val_rouge(captions[i], [sentences_text[i]])
-            self.val_meteor.append(
-                meteor(
-                    [word_tokenize(e) for e in sentences_text[i]],
-                    word_tokenize(captions[i]),
-                )
-            )
+        # for i in range(len(captions)):
+        #     self.val_bleu.append(
+        #         bleu_score.sentence_bleu(sentences_text[i], captions[i][0])
+        #     )
+        #     # self.val_bleu.append(bleu_score.sentence_bleu([word_tokenize(e) for e in sentences_text[i]], word_tokenize(captions[i]), smoothing_function=self.chencherry.method1))
+        #     self.val_rouge(captions[i], [sentences_text[i]])
+        #     self.val_meteor.append(
+        #         meteor(
+        #             [word_tokenize(e) for e in sentences_text[i]],
+        #             word_tokenize(captions[i]),
+        #         )
+        #     )
 
         # if this is not the main process, do not log examples
         if self.global_rank != 0:
@@ -211,15 +220,15 @@ class ImageCaptioningSystem(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         if self.global_rank != 0:
             return
-        val_bleu = self.val_bleu.compute()
-        self.log("val/bleu", val_bleu, on_epoch=True)
-        self.val_bleu.reset()
-        val_rouge = self.val_rouge.compute()
-        self.log("val/rouge", val_rouge, on_epoch=True)
-        self.val_rouge.reset()
-        val_meteor = stats.mean(self.val_meteor)
-        self.log("val/meteor", val_meteor, on_epoch=True)
-        self.val_meteor = []
+        # val_bleu = self.val_bleu.compute()
+        # self.log("val/bleu", val_bleu, on_epoch=True)
+        # self.val_bleu.reset()
+        # val_rouge = self.val_rouge.compute()
+        # self.log("val/rouge", val_rouge, on_epoch=True)
+        # self.val_rouge.reset()
+        # val_meteor = stats.mean(self.val_meteor)
+        # self.log("val/meteor", val_meteor, on_epoch=True)
+        # self.val_meteor = []
         self.logger.log_text(
             key="examples/val", dataframe=self.val_examples, step=self.global_step
         )
