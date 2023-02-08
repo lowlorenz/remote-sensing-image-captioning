@@ -183,14 +183,14 @@ def train(
         wandb_run_name = f"{run_name}-{cycle}"
         wandb.login(key=api_key)
 
-        # if debug:
-        #     wandb_logger = WandbLogger(
-        #         mode="disabled",
-        #         project="active_learning",
-        #       config=config,
-        #         name=wandb_run_name,
-        #         group=group_name,
-        #     )
+        if debug:
+            wandb_logger = WandbLogger(
+                mode="disabled",
+                project="active_learning",
+              config=config,
+                name=wandb_run_name,
+                group=group_name,
+            )
 
         if True:
             wandb_logger = WandbLogger(
@@ -288,7 +288,7 @@ def train(
                 expected_num_files=num_gpus,
             )
 
-            train_set.add_labels_by_img_id(img_ids)
+        train_set.add_labels_by_img_id(img_ids)
 
 
 if __name__ == "__main__":

@@ -223,18 +223,17 @@ class ImageCaptioningSystem(pl.LightningModule):
         with torch.no_grad():
             # Confidence
             if "conf" in self.method:
+                # Öeast confidence
                 out = self.model(pixel_values=pixel_values, labels=label, output_hidden_states=True)
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
                 sentence_conf = torch.mean(word_conf, dim=1)
-                assert torch.numel(sentence_conf) == bs
-                top_conf, _ = torch.topk(logits_softmax, 2, dim=2)
-                # word_margin = top_conf[:,0] - top_conf[:,1]
-                # assert word_margin.ndim == 1, print(word_margin.shape)
-                # sentence_margin = torch.mean(word_margin, dim=1)
-                # TODO
-                sentence_margin = sentence_conf
+                # Margin of confidence
+                top_2, _ = torch.topk(logits_softmax, 2, dim=2)
+                word_margin = top_2[:, :, 0] - top_2[:, :, 1]
+                sentence_margin = torch.mean(word_margin, dim=1)
+                assert torch.numel(sentence_margin) == bs
             # Image diversity
             if "cluster" in self.method:
                 image_embeddings = self.model.encoder(

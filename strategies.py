@@ -38,7 +38,6 @@ def confidence_sample(path, elems_to_add, mode="least"):
     if mode == "margin":
         joint_list.sort(reverse=True, key=lambda l: l[0])
     returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
-    print(returned_ids[:20])
 
     return torch.tensor(returned_ids)
 
