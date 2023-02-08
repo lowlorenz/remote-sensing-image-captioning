@@ -21,7 +21,6 @@ from evaluation import eval_validation
 # with open("secrets.txt", "r") as config_key:
 #     api_key = config_key.readline().strip()
 
-
 def get_data_loaders(
     batch_size, train_set=None, val_set=None, test_set=None, unlabeled_set=None
 ):
@@ -174,8 +173,8 @@ def train(
     prediction_path_root.mkdir(parents=True, exist_ok=True)
 
     strategy = "ddp" if num_devices > 1 or num_nodes > 1 else None
-    limit_train_batches = 32 if debug else None
-    limit_val_batches = 32 if debug else None
+    limit_train_batches = 10 if debug else None
+    limit_val_batches = 10 if debug else None
     log_every_n_steps = 8  # if debug else 50
 
     num_gpus = num_devices * num_nodes
@@ -192,14 +191,14 @@ def train(
         wandb_run_name = f"{run_name}-{cycle}"
         # wandb.login(key=api_key)
 
-        # if debug:
-        #     wandb_logger = WandbLogger(
-        #         mode="disabled",
-        #         project="active_learning",
-        #       config=config,
-        #         name=wandb_run_name,
-        #         group=group_name,
-        #     )
+        if debug:
+            wandb_logger = WandbLogger(
+                mode="disabled",
+                project="active_learning",
+              config=config,
+                name=wandb_run_name,
+                group=group_name,
+            )
 
         if True:
             wandb_logger = WandbLogger(

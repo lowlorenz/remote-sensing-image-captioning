@@ -20,6 +20,65 @@ def get_tokenizer():
 
     return bert, bert_tokenizer, gpt_tokenizer, device
 
+def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
+    # Load IDs
+    id_files = os.listdir(path)
+    id_files = [f for f in id_files if f.startswith("img_ids")]
+    ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
+    ids = ids.flatten()
+    ids = ids.detach().cpu()
+    if cluster_ids is not None:
+        mask = np.isin(ids, conf_ids.numpy())
+    else:
+        mask = np.full(ids.shape, True)
+
+    # Load confidence values
+    confidence_files = os.listdir(path)
+    if mode == "least":
+        confidence_files = [f for f in confidence_files if f.startswith("confidence")][mask]
+    if mode == "margin":
+        confidence_files = [f for f in confidence_files if f.startswith("margin")][mask]
+    confidences = torch.cat([torch.load(Path(path, f)) for f in confidence_files], axis=0)
+    confidences = confidences.flatten()
+    confidences = list(confidences.detach().cpu())
+
+    joint_list = [a for a in zip(confidences, ids)]
+    if mode == "least":
+        joint_list.sort(key=lambda l: l[0])
+    if mode == "margin":
+        joint_list.sort(reverse=True, key=lambda l: l[0])
+    returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
+
+    return torch.tensor(returned_ids)
+
+
+def conf_and_cluster(path, elems_to_add, expected_num_files, type="image", mode="least"):
+    # Select least confident data points
+    least_conf_ids = confidence_sample(path, elems_to_add*4, mode)
+    # Cluster
+    returned_ids = diversity_based_sample(
+        path=path,
+        num_clusters=elems_to_add,
+        type=type,
+        expected_num_files=expected_num_files,
+        conf_ids=least_conf_ids,
+    )
+
+    return torch.tensor(returned_ids)
+
+def cluster_and_conf(path, elems_to_add, expected_num_files, type="image", mode="least"):
+    # Cluster
+    cluster_ids = diversity_based_sample(
+        path=path,
+        num_clusters=elems_to_add,
+        type=type,
+        expected_num_files=expected_num_files,
+        conf_ids=least_conf_ids,
+    )
+    # Select least confident data points
+    returned_ids = confidence_sample(path, elems_to_add * 4, mode, cluster_ids)
+
+    return torch.tensor(returned_ids)
 
 def load_embeddings(
     path: str,
