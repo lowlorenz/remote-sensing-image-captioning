@@ -6,6 +6,7 @@ from sklearn.cluster import KMeans
 import numpy as np
 import time
 from transformers import GPT2TokenizerFast, BertTokenizer, BertModel
+import math
 
 
 def get_tokenizer():
@@ -19,6 +20,7 @@ def get_tokenizer():
     )
 
     return bert, bert_tokenizer, gpt_tokenizer, device
+
 
 def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
     # Load IDs
@@ -35,10 +37,14 @@ def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
     # Load confidence values
     confidence_files = os.listdir(path)
     if mode == "least":
-        confidence_files = [f for f in confidence_files if f.startswith("confidence")][mask]
+        confidence_files = [f for f in confidence_files if f.startswith("confidence")][
+            mask
+        ]
     if mode == "margin":
         confidence_files = [f for f in confidence_files if f.startswith("margin")][mask]
-    confidences = torch.cat([torch.load(Path(path, f)) for f in confidence_files], axis=0)
+    confidences = torch.cat(
+        [torch.load(Path(path, f)) for f in confidence_files], axis=0
+    )
     confidences = confidences.flatten()
     confidences = list(confidences.detach().cpu())
 
@@ -52,9 +58,11 @@ def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
     return torch.tensor(returned_ids)
 
 
-def conf_and_cluster(path, elems_to_add, expected_num_files, type="image", mode="least"):
+def conf_and_cluster(
+    path, elems_to_add, expected_num_files, type="image", mode="least"
+):
     # Select least confident data points
-    least_conf_ids = confidence_sample(path, elems_to_add*4, mode)
+    least_conf_ids = confidence_sample(path, elems_to_add * 4, mode)
     # Cluster
     returned_ids = diversity_based_sample(
         path=path,
@@ -66,19 +74,22 @@ def conf_and_cluster(path, elems_to_add, expected_num_files, type="image", mode=
 
     return torch.tensor(returned_ids)
 
-def cluster_and_conf(path, elems_to_add, expected_num_files, type="image", mode="least"):
+
+def cluster_and_conf(
+    path, elems_to_add, expected_num_files, type="image", mode="least"
+):
     # Cluster
     cluster_ids = diversity_based_sample(
         path=path,
         num_clusters=elems_to_add,
         type=type,
         expected_num_files=expected_num_files,
-        conf_ids=least_conf_ids,
     )
     # Select least confident data points
     returned_ids = confidence_sample(path, elems_to_add * 4, mode, cluster_ids)
 
     return torch.tensor(returned_ids)
+
 
 def load_embeddings(
     path: str,
@@ -97,6 +108,7 @@ def load_embeddings(
         embeddings = embeddings[mask]
 
     return embeddings, ids
+
 
 def load_text_embeddings(
     path: str,
@@ -122,17 +134,25 @@ def load_text_embeddings(
         [torch.load(Path(path, file)) for file in predicted_tokens_files], axis=0
     )
 
+    # TODO: Use BERT to get embeddings
     bert, bert_tokenizer, gpt_tokenizer, device = get_tokenizer()
 
     hypothesis = gpt_tokenizer.batch_decode(predicted_tokens, skip_special_tokens=True)
     with torch.no_grad():
-        tokens = bert_tokenizer(hypothesis, padding="longest").input_ids
-        tokens = torch.tensor(tokens).to(device)
-        embeddings = bert(tokens).pooler_output
+        all_tokens = bert_tokenizer(hypothesis, padding="longest").input_ids
+        all_tokens = torch.tensor(all_tokens)
+        num_batches = math.ceil(all_tokens.shape[0] / 32)
+        embeddings = []
+        for i in range(num_batches):
+            tokens = all_tokens[i * 32 : (i + 1) * 32].to(device)
+            e = bert(tokens).pooler_output.detach().cpu()
+            embeddings.append(e)
+
+    embeddings = torch.cat(embeddings, axis=0).numpy()
 
     ids = torch.cat([torch.load(Path(path, file)) for file in id_files], axis=0)
     ids = ids.detach().cpu().numpy()
-    embeddings = embeddings.detach().cpu().numpy()
+    # embeddings = embeddings.detach().cpu().numpy()
 
     return embeddings, ids
 
@@ -214,27 +234,6 @@ def confidence_sample(path, elems_to_add, mode="least"):
     return torch.tensor(returned_ids)
 
 
-def confidence_then_cluster_sample(
-    path: str,
-    elems_to_add: int,
-    cluster_mode: str,
-    condfidence_mode: str,
-    expected_num_files: int,
-):
-    # Select least confident data points
-    highest_confidence_ids = confidence_sample(path, elems_to_add * 4, condfidence_mode)
-
-    returned_ids = diversity_based_sample(
-        path=path,
-        num_clusters=elems_to_add,
-        type=cluster_mode,
-        expected_num_files=expected_num_files,
-        conf_ids=highest_confidence_ids,
-    )
-
-    return torch.tensor(returned_ids)
-
-
 def diversity_based_sample(
     path: str,
     num_clusters: int,
@@ -252,7 +251,13 @@ def diversity_based_sample(
         cluster_members = ids[label == i]
 
         if len(cluster_members) == 0:
-            print('Cluster is empty, selecting no entry', embeddings.shape, ids.shape, label.shape, num_clusters)
+            print(
+                "Cluster is empty, selecting no entry",
+                embeddings.shape,
+                ids.shape,
+                label.shape,
+                num_clusters,
+            )
             continue
 
         selected_ids.append(np.random.choice(cluster_members))

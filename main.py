@@ -4,22 +4,26 @@ from dataset import NWPU_Captions
 from torchvision.transforms import ToTensor
 from model import ImageCaptioningSystem
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+
+# from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from prediction_writer import PredictionWriter
 import torch
-from torch.utils.data import DataLoader
-import wandb
+
+# from torch.utils.data import DataLoader
+# import wandb
 import datetime
 import strategies
 import os
 from pathlib import Path
-from sklearn.model_selection import train_test_split
-from evaluation import eval_validation
+
+# from sklearn.model_selection import train_test_split
+# from evaluation import eval_validation
 
 
 # with open("secrets.txt", "r") as config_key:
 #     api_key = config_key.readline().strip()
+
 
 def get_data_loaders(
     batch_size, train_set=None, val_set=None, test_set=None, unlabeled_set=None
@@ -99,7 +103,7 @@ def train(
     seed: int,
     conf_mode: str,
     cluster_mode: str,
-    mutliple_sentence_loss:bool,
+    mutliple_sentence_loss: bool,
 ) -> None:
     # save the config for wandb
     config = {
@@ -121,7 +125,7 @@ def train(
         "mode": mode,
         "seed": seed,
         "conf_mode": conf_mode,
-        "mutliple_sentence_loss": mutliple_sentence_loss
+        "mutliple_sentence_loss": mutliple_sentence_loss,
     }
 
     # seed everything for reproducibility
@@ -188,25 +192,25 @@ def train(
             strategy=sample_method,
         )
 
-        wandb_run_name = f"{run_name}-{cycle}"
+        # wandb_run_name = f"{run_name}-{cycle}"
         # wandb.login(key=api_key)
 
-        if debug:
-            wandb_logger = WandbLogger(
-                mode="disabled",
-                project="active_learning",
-              config=config,
-                name=wandb_run_name,
-                group=group_name,
-            )
+        # if debug:
+        #     wandb_logger = WandbLogger(
+        #         mode="disabled",
+        #         project="active_learning",
+        #       config=config,
+        #         name=wandb_run_name,
+        #         group=group_name,
+        #     )
 
-        if True:
-            wandb_logger = WandbLogger(
-                project="active_learning",
-                config=config,
-                name=wandb_run_name,
-                group=group_name,
-            )
+        # if True:
+        #     wandb_logger = WandbLogger(
+        #         project="active_learning",
+        #         config=config,
+        #         name=wandb_run_name,
+        #         group=group_name,
+        #     )
 
         # print("Setup Trainer ...")
         trainer = pl.Trainer(
@@ -221,12 +225,14 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            logger=wandb_logger,
+            # logger=wandb_logger,
             num_sanity_val_steps=0,
         )
 
         # print("Loading model...")
-        model = ImageCaptioningSystem(learning_rate, device_type, sample_method, mutliple_sentence_loss)
+        model = ImageCaptioningSystem(
+            learning_rate, device_type, sample_method, mutliple_sentence_loss
+        )
         prediction_writer.update_cycle(cycle)
 
         print("Get Dataloaders ...")
@@ -249,7 +255,7 @@ def train(
 
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
-        wandb_logger.experiment.finish()
+        # wandb_logger.experiment.finish()
 
         if cycle == max_cycles - 1:
             break
@@ -272,6 +278,7 @@ def train(
         unlabeled_prediction_path = prediction_writer.current_dir
 
         if sample_method == "confidence":
+
             img_ids = strategies.confidence_sample(
                 unlabeled_prediction_path, elements_to_add, conf_mode
             )
@@ -286,12 +293,21 @@ def train(
             )
 
         elif sample_method == "confidence+cluster":
-            img_ids = strategies.confidence_then_cluster_sample(
+            img_ids = strategies.conf_and_cluster(
                 path=unlabeled_prediction_path,
                 elems_to_add=elements_to_add,
-                cluster_mode=cluster_mode,
-                condfidence_mode=conf_mode,
                 expected_num_files=num_gpus,
+                type=cluster_mode,
+                mode=conf_mode,
+            )
+
+        elif sample_method == "cluster+confidence":
+            img_ids = strategies.cluster_and_conf(
+                path=unlabeled_prediction_path,
+                elems_to_add=elements_to_add,
+                expected_num_files=num_gpus,
+                type=cluster_mode,
+                mode=conf_mode,
             )
 
         train_set.add_labels_by_img_id(img_ids)

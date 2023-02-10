@@ -22,7 +22,13 @@ import random
 
 
 class ImageCaptioningSystem(pl.LightningModule):
-    def __init__(self, lr:float, device_type: str, sampling_method:str, mutliple_sentence_loss:bool):
+    def __init__(
+        self,
+        lr: float,
+        device_type: str,
+        sampling_method: str,
+        mutliple_sentence_loss: bool,
+    ):
         super().__init__()
         """_summary_
         """
@@ -77,7 +83,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         else:
             index = random.randint(0, 4)
-            label = tokens[:,index,:].squeeze().long().contiguous()
+            label = tokens[:, index, :].squeeze().long().contiguous()
             # print(label.shape, pixel_values.shape, index, tokens.shape)
             output = self.model(pixel_values=pixel_values, labels=label)
             loss = output.loss
@@ -108,7 +114,7 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        self.log("train/loss", loss, on_step=True, on_epoch=False)
+        # self.log("train/loss", loss, on_step=True, on_epoch=False)
 
         # detokenize human readable captions
         captions = self.tokenizer.batch_decode(
@@ -140,24 +146,24 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return loss
 
-    def training_epoch_end(self, outputs):
-        if self.global_rank != 0:
-            return
+    # def training_epoch_end(self, outputs):
+    #     if self.global_rank != 0:
+    #         return
 
-        # train_bleu = stats.mean(self.train_bleu)
-        # self.log("train/bleu", train_bleu, on_epoch=True)
-        # train_rouge = self.train_rouge.compute()
-        # self.log("train/rouge", train_rouge, on_epoch=True)
-        # train_meteor = stats.mean(self.train_meteor)
-        # self.log("train/meteor", train_meteor, on_epoch=True)
+    #     # train_bleu = stats.mean(self.train_bleu)
+    #     # self.log("train/bleu", train_bleu, on_epoch=True)
+    #     # train_rouge = self.train_rouge.compute()
+    #     # self.log("train/rouge", train_rouge, on_epoch=True)
+    #     # train_meteor = stats.mean(self.train_meteor)
+    #     # self.log("train/meteor", train_meteor, on_epoch=True)
 
-        self.logger.log_text(
-            key="examples/train", dataframe=self.train_examples, step=self.global_step
-        )
+    #     self.logger.log_text(
+    #         key="examples/train", dataframe=self.train_examples, step=self.global_step
+    #     )
 
-        # # self.train_meteor = []
-        # # self.train_rouge.reset()
-        # # self.train_bleu = []
+    #     # # self.train_meteor = []
+    #     # # self.train_rouge.reset()
+    #     # # self.train_bleu = []
 
     def validation_step(self, batch, batch_idx):
         # prepare inputs
@@ -175,7 +181,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         with torch.no_grad():
             loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
-        self.log("val/loss", loss, on_step=True, on_epoch=True)
+        # self.log("val/loss", loss, on_step=True, on_epoch=True)
 
         # detokenize human readable captions
         captions = self.tokenizer.batch_decode(
@@ -205,21 +211,21 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
-    def validation_epoch_end(self, outputs):
-        if self.global_rank != 0:
-            return
-        # val_bleu = self.val_bleu.compute()
-        # self.log("val/bleu", val_bleu, on_epoch=True)
-        # self.val_bleu.reset()
-        # val_rouge = self.val_rouge.compute()
-        # self.log("val/rouge", val_rouge, on_epoch=True)
-        # self.val_rouge.reset()
-        # val_meteor = stats.mean(self.val_meteor)
-        # self.log("val/meteor", val_meteor, on_epoch=True)
-        # self.val_meteor = []
-        self.logger.log_text(
-            key="examples/val", dataframe=self.val_examples, step=self.global_step
-        )
+    # def validation_epoch_end(self, outputs):
+    #     if self.global_rank != 0:
+    #         return
+    #     # val_bleu = self.val_bleu.compute()
+    #     # self.log("val/bleu", val_bleu, on_epoch=True)
+    #     # self.val_bleu.reset()
+    #     # val_rouge = self.val_rouge.compute()
+    #     # self.log("val/rouge", val_rouge, on_epoch=True)
+    #     # self.val_rouge.reset()
+    #     # val_meteor = stats.mean(self.val_meteor)
+    #     # self.log("val/meteor", val_meteor, on_epoch=True)
+    #     # self.val_meteor = []
+    #     self.logger.log_text(
+    #         key="examples/val", dataframe=self.val_examples, step=self.global_step
+    #     )
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
         sentence_conf = None
@@ -235,7 +241,9 @@ class ImageCaptioningSystem(pl.LightningModule):
             # Confidence
             if "conf" in self.method:
                 # Least confidence
-                out = self.model(pixel_values=pixel_values, labels=label, output_hidden_states=True)
+                out = self.model(
+                    pixel_values=pixel_values, labels=label, output_hidden_states=True
+                )
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
@@ -245,14 +253,19 @@ class ImageCaptioningSystem(pl.LightningModule):
                 word_margin = top_2[:, :, 0] - top_2[:, :, 1]
                 sentence_margin = torch.mean(word_margin, dim=1)
                 assert torch.numel(sentence_margin) == bs
+
             # Image diversity
-            if "cluster" in self.method:
+            elif "cluster" in self.method:
+                # get the image embeddings by calling the encoder and retrieving only the pooler layer output
                 image_embeddings = self.model.encoder(
                     pixel_values
                 ).pooler_output  # (batch_size, hidden_size)
+                # get the logits by calling the whole model on the image
+                logits = self.model(pixel_values=pixel_values, labels=label).logits
+            elif "random" in self.method:
                 logits = self.model(pixel_values=pixel_values, labels=label).logits
 
-                predicted_tokens = logits.argmax(dim=-1)
+            predicted_tokens = logits.argmax(dim=-1)
 
         return (
             sentence_conf,
