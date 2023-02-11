@@ -49,10 +49,7 @@ def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
     confidences = list(confidences.detach().cpu())
 
     joint_list = [a for a in zip(confidences, ids)]
-    if mode == "least":
-        joint_list.sort(key=lambda l: l[0])
-    if mode == "margin":
-        joint_list.sort(reverse=True, key=lambda l: l[0])
+    joint_list.sort(key=lambda l: l[0])
     returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
 
     return torch.tensor(returned_ids)
