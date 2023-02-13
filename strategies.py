@@ -22,42 +22,6 @@ def get_tokenizer():
     return bert, bert_tokenizer, gpt_tokenizer, device
 
 
-def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
-    # Load IDs
-    id_files = os.listdir(path)
-    id_files = [f for f in id_files if f.startswith("img_ids")]
-    ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
-    ids = ids.flatten()
-    ids = ids.detach().cpu()
-    if cluster_ids is not None:
-        mask = np.isin(ids, conf_ids.numpy())
-    else:
-        mask = np.full(ids.shape, True)
-
-    # Load confidence values
-    confidence_files = os.listdir(path)
-    if mode == "least":
-        confidence_files = [f for f in confidence_files if f.startswith("confidence")][
-            mask
-        ]
-    if mode == "margin":
-        confidence_files = [f for f in confidence_files if f.startswith("margin")][mask]
-    confidences = torch.cat(
-        [torch.load(Path(path, f)) for f in confidence_files], axis=0
-    )
-    confidences = confidences.flatten()
-    confidences = list(confidences.detach().cpu())
-
-    joint_list = [a for a in zip(confidences, ids)]
-    if mode == "least":
-        joint_list.sort(key=lambda l: l[0])
-    if mode == "margin":
-        joint_list.sort(reverse=True, key=lambda l: l[0])
-    returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
-
-    return torch.tensor(returned_ids)
-
-
 def conf_and_cluster(
     path, elems_to_add, expected_num_files, type="image", mode="least"
 ):
@@ -134,7 +98,6 @@ def load_text_embeddings(
         [torch.load(Path(path, file)) for file in predicted_tokens_files], axis=0
     )
 
-    # TODO: Use BERT to get embeddings
     bert, bert_tokenizer, gpt_tokenizer, device = get_tokenizer()
 
     hypothesis = gpt_tokenizer.batch_decode(predicted_tokens, skip_special_tokens=True)
@@ -188,7 +151,20 @@ def load_image_embeddings(
     return embeddings, ids
 
 
-def confidence_sample(path, elems_to_add, mode="least"):
+def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
+    # load image ids
+    id_files = os.listdir(path)
+    id_files = [f for f in id_files if f.startswith("img_ids")]
+    ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
+    ids = ids.flatten()
+    ids = ids.detach().cpu()
+
+    # if cluster_ids is not None, then only keep the ids that are in the cluster_ids
+    if cluster_ids is not None:
+        mask = np.isin(ids, cluster_ids.numpy())
+    else:
+        mask = np.full(ids.shape, True)
+
     # load image embeddings
     confidence_files = os.listdir(path)
 
@@ -203,18 +179,11 @@ def confidence_sample(path, elems_to_add, mode="least"):
     # concatenate all the confidence files
     confidences = torch.cat(
         [torch.load(Path(path, f)) for f in confidence_files], axis=0
-    )
+    )[torch.tensor(mask)]
 
     # flatten the tensor and convert it to a list, so that it can be zipped and sorted
     confidences = confidences.flatten()
     confidences = list(confidences.detach().cpu())
-
-    # load image ids
-    id_files = os.listdir(path)
-    id_files = [f for f in id_files if f.startswith("img_ids")]
-    ids = torch.cat([torch.load(Path(path, f)) for f in id_files], axis=0)
-    ids = ids.flatten()
-    ids = ids.detach().cpu()
 
     # sort the ids based on the confidence
     joint_list = [a for a in zip(confidences, ids)]
@@ -225,11 +194,10 @@ def confidence_sample(path, elems_to_add, mode="least"):
 
     # if mode is margin sort the list by the margin values
     if mode == "margin":
-        joint_list.sort(reverse=True, key=lambda l: l[0])
+        joint_list.sort(key=lambda l: l[0])
 
     # keep the img_ids of the highest confidence values and drop the rest
     returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]
-    print(returned_ids[:20])
 
     return torch.tensor(returned_ids)
 

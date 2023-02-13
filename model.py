@@ -255,14 +255,15 @@ class ImageCaptioningSystem(pl.LightningModule):
                 assert torch.numel(sentence_margin) == bs
 
             # Image diversity
-            elif "cluster" in self.method:
+            if "cluster" in self.method:
                 # get the image embeddings by calling the encoder and retrieving only the pooler layer output
                 image_embeddings = self.model.encoder(
                     pixel_values
                 ).pooler_output  # (batch_size, hidden_size)
                 # get the logits by calling the whole model on the image
                 logits = self.model(pixel_values=pixel_values, labels=label).logits
-            elif "random" in self.method:
+
+            if "cluster" not in self.method and "conf" not in self.method:
                 logits = self.model(pixel_values=pixel_values, labels=label).logits
 
             predicted_tokens = logits.argmax(dim=-1)

@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH -J conf_m_1
-#SBATCH -o /home/users/l/lorenz-08-15/activelearning_ic/cluster_outputs/conf_margin_1.log
+#SBATCH -J conf_m_0
+#SBATCH -o /home/users/l/lorenz-08-15/activelearning_ic/cluster_outputs/conf_margin_0.log
 #SBATCH -D /home/users/l/lorenz-08-15/activelearning_ic/
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
@@ -24,4 +24,4 @@ fi
 module load nvidia/cuda/11.2
 
 # srun python mnist.py
-srun python main.py --batch_size 12 --max_cycles 9 --epochs 10 --run_name conf_margin_1 --sample_method confidence --conf_mode margin --seed 1
+srun python main.py --batch_size 12 --max_cycles 9 --epochs 10 --run_name conf_margin_0 --sample_method confidence --conf_mode margin --seed 0
