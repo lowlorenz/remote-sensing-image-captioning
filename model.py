@@ -249,12 +249,12 @@ class ImageCaptioningSystem(pl.LightningModule):
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
-                least_word_conf = torch.min(word_conf)
+                least_word_conf, _ = torch.min(word_conf, dim=1)
                 sentence_conf = torch.mean(word_conf, dim=1)
                 # Margin of confidence
                 top_2, _ = torch.topk(logits_softmax, 2, dim=2)
                 word_margin = top_2[:, :, 0] - top_2[:, :, 1]
-                least_word_margin = torch.min(word_margin)
+                least_word_margin, _ = torch.min(word_margin, dim=1)
                 sentence_margin = torch.mean(word_margin, dim=1)
                 assert torch.numel(sentence_margin) == bs
 

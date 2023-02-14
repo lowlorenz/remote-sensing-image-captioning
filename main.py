@@ -142,7 +142,7 @@ def train(
     if device_type == "cuda":
         images_path = Path(data_path, "NWPU_images")
     else:
-        images_path = Path(data_path)
+        images_path = Path(data_path, "NWPU_images")
     annotations_path = Path(data_path, "dataset_nwpu.json")
 
     print("Initalizing dataset...")
