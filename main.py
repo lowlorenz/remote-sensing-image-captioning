@@ -80,6 +80,7 @@ def get_data_loaders(
 @click.option("--mode", default="train", help="Choose between train and test mode.")
 @click.option("--seed", default=42, help="Global random seed.")
 @click.option("--conf_mode", default="least", help="Whether to sample based on \"least\" confidence or \"margin\" of confidence")
+@click.option("--conf_average", default="sentence", help="Whether to sample based on average \"sentence\" confidence or minimum \"word\" confidence")
 @click.option("--cluster_mode", default="image", help="Whether to use the image or text embeddings for clustering")
 @click.option("--mutliple_sentence_loss", is_flag=True, help="Whether to use the image or text embeddings for clustering")
 # fmt: on
@@ -102,6 +103,7 @@ def train(
     mode: str,
     seed: int,
     conf_mode: str,
+    conf_average: str,
     cluster_mode: str,
     mutliple_sentence_loss: bool,
 ) -> None:
@@ -125,6 +127,7 @@ def train(
         "mode": mode,
         "seed": seed,
         "conf_mode": conf_mode,
+        "conf_average": conf_average,
         "mutliple_sentence_loss": mutliple_sentence_loss,
     }
 
@@ -167,7 +170,7 @@ def train(
     # generate a random mask for the initial train set
     train_set.set_empty_mask()
     initial_elements = int(train_set.max_length() * init_set_size)
-    init_set_labels = train_set.add_random_labels(initial_elements)
+    train_set.add_random_labels(initial_elements)
 
     # generate a string in the form of day-month-year-hour-minute for naming the wandb group
     date_time_str = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")
@@ -241,16 +244,17 @@ def train(
         )
 
         print(f"Fit model on {len(train_set)} samples...")
-        trainer.fit(
-            model,
-            train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
-            ckpt_path=ckpt_path,
-        )
+        if not debug:
+            trainer.fit(
+                model,
+                train_dataloaders=train_loader,
+                val_dataloaders=val_loader,
+                ckpt_path=ckpt_path,
+            )
 
         if not debug:
             trainer.save_checkpoint(
-                f"/scratch/activelearning-ic/{run_name}-{date_time_str}-{cycle}.ckpt"
+                f"/home/users/w/wallburg/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
             )
 
         prediction_writer.update_mode("val")
@@ -278,13 +282,14 @@ def train(
         unlabeled_prediction_path = prediction_writer.current_dir
 
         if sample_method == "confidence":
-
             img_ids = strategies.confidence_sample(
-                unlabeled_prediction_path, elements_to_add, conf_mode
+                path=unlabeled_prediction_path,
+                elems_to_add=elements_to_add,
+                mode=conf_mode,
+                average=conf_average,
             )
 
         elif sample_method == "cluster":
-
             img_ids = strategies.diversity_based_sample(
                 path=unlabeled_prediction_path,
                 num_clusters=elements_to_add,
@@ -299,6 +304,7 @@ def train(
                 expected_num_files=num_gpus,
                 type=cluster_mode,
                 mode=conf_mode,
+                conf_average=conf_average,
             )
 
         elif sample_method == "cluster+confidence":
@@ -308,6 +314,7 @@ def train(
                 expected_num_files=num_gpus,
                 type=cluster_mode,
                 mode=conf_mode,
+                conf_average=conf_average,
             )
 
         train_set.add_labels_by_img_id(img_ids)

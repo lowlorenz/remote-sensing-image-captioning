@@ -23,10 +23,10 @@ def get_tokenizer():
 
 
 def conf_and_cluster(
-    path, elems_to_add, expected_num_files, type="image", mode="least"
+    path, elems_to_add, expected_num_files, type="image", mode="least", conf_average="sentence"
 ):
     # Select least confident data points
-    least_conf_ids = confidence_sample(path, elems_to_add * 4, mode)
+    least_conf_ids = confidence_sample(path, elems_to_add * 4, mode, conf_average)
     # Cluster
     returned_ids = diversity_based_sample(
         path=path,
@@ -40,7 +40,7 @@ def conf_and_cluster(
 
 
 def cluster_and_conf(
-    path, elems_to_add, expected_num_files, type="image", mode="least"
+    path, elems_to_add, expected_num_files, type="image", mode="least", conf_average="sentence"
 ):
     # Cluster
     cluster_ids = diversity_based_sample(
@@ -50,7 +50,12 @@ def cluster_and_conf(
         expected_num_files=expected_num_files,
     )
     # Select least confident data points
-    returned_ids = confidence_sample(path, elems_to_add * 4, mode, cluster_ids)
+    returned_ids = confidence_sample(
+        path=path,
+        elems_to_add=elems_to_add * 4,
+        mode=mode,
+        average=conf_average,
+        cluster_ids=cluster_ids)
 
     return torch.tensor(returned_ids)
 
@@ -151,7 +156,7 @@ def load_image_embeddings(
     return embeddings, ids
 
 
-def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
+def confidence_sample(path, elems_to_add, mode="least", average="sentence", cluster_ids=None):
     # load image ids
     id_files = os.listdir(path)
     id_files = [f for f in id_files if f.startswith("img_ids")]
@@ -165,16 +170,19 @@ def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
     else:
         mask = np.full(ids.shape, True)
 
-    # load image embeddings
     confidence_files = os.listdir(path)
 
     # when least confidence is selected, only load the confidence files
-    if mode == "least":
+    if mode == "least" and average == 'sentence':
         confidence_files = [f for f in confidence_files if f.startswith("confidence")]
+    elif mode == "least" and average == 'word':
+        confidence_files = [f for f in confidence_files if f.startswith("word_confidence")]
 
     # when margin confidence is selected, only load the margin files
-    if mode == "margin":
+    elif mode == "margin" and average == "sentence":
         confidence_files = [f for f in confidence_files if f.startswith("margin")]
+    elif mode == "margin" and average == "word":
+        confidence_files = [f for f in confidence_files if f.startswith("word_margin")]
 
     # concatenate all the confidence files
     confidences = torch.cat(
@@ -187,14 +195,7 @@ def confidence_sample(path, elems_to_add, mode="least", cluster_ids=None):
 
     # sort the ids based on the confidence
     joint_list = [a for a in zip(confidences, ids)]
-
-    # if mode is least sort the list by the raw confidence values
-    if mode == "least":
-        joint_list.sort(key=lambda l: l[0])
-
-    # if mode is margin sort the list by the margin values
-    if mode == "margin":
-        joint_list.sort(key=lambda l: l[0])
+    joint_list.sort(key=lambda l: l[0])
 
     # keep the img_ids of the highest confidence values and drop the rest
     returned_ids = [ident[1] for ident in joint_list[:elems_to_add]]

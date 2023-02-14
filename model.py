@@ -230,6 +230,8 @@ class ImageCaptioningSystem(pl.LightningModule):
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
         sentence_conf = None
         sentence_margin = None
+        least_word_conf = None
+        least_word_margin = None
         image_embeddings = None
         predicted_tokens = None
         pixel_values, sentences_token, img_ids, sentences_ids = batch
@@ -247,10 +249,12 @@ class ImageCaptioningSystem(pl.LightningModule):
                 logits = out.logits
                 logits_softmax = torch.nn.functional.softmax(logits, dim=2)
                 word_conf, _ = torch.max(logits_softmax, dim=2)
+                least_word_conf = torch.min(word_conf)
                 sentence_conf = torch.mean(word_conf, dim=1)
                 # Margin of confidence
                 top_2, _ = torch.topk(logits_softmax, 2, dim=2)
                 word_margin = top_2[:, :, 0] - top_2[:, :, 1]
+                least_word_margin = torch.min(word_margin)
                 sentence_margin = torch.mean(word_margin, dim=1)
                 assert torch.numel(sentence_margin) == bs
 
@@ -270,7 +274,9 @@ class ImageCaptioningSystem(pl.LightningModule):
 
         return (
             sentence_conf,
+            least_word_conf,
             sentence_margin,
+            least_word_margin,
             image_embeddings,
             img_ids,
             predicted_tokens,
