@@ -3,16 +3,13 @@
 <div align="center">    
  
 # Active Learning Criteria for Remote Sensing Image Captioning     
-
+<!--  
 [![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539)
 [![Conference](http://img.shields.io/badge/NeurIPS-2019-4b44ce.svg)](https://papers.nips.cc/book/advances-in-neural-information-processing-systems-31-2018)
 [![Conference](http://img.shields.io/badge/ICLR-2019-4b44ce.svg)](https://papers.nips.cc/book/advances-in-neural-information-processing-systems-31-2018)
 [![Conference](http://img.shields.io/badge/AnyConference-year-4b44ce.svg)](https://papers.nips.cc/book/advances-in-neural-information-processing-systems-31-2018)  
-<!--
-ARXIV   
-[![Paper](http://img.shields.io/badge/arxiv-math.co:1480.1111-B31B1B.svg)](https://www.nature.com/articles/nature14539)
--->
-![CI testing](https://github.com/PyTorchLightning/deep-learning-project-template/workflows/CI%20testing/badge.svg?branch=master&event=push)
+--> 
+![DEMO](https://lowlorenz-remotesensingwebapp-app-limtid.streamlit.app/)
 
 
 <!--  
@@ -21,27 +18,48 @@ Conference
 </div>
  
 ## Description   
-What it does   
+Our final submission for the TU Berlin course "Computer Vision for Remote Sensing" (Winter 22/23).
+This project consists of a active learning based remote sensing image captioning system which has been trained using different active learning criteria.
 
 ## How to run   
-First, install dependencies   
 ```bash
 # clone project   
-git clone https://github.com/YourGithubName/deep-learning-project-template
+git clone https://git.tu-berlin.de/wallburg/activelearning_ic.git
 
-# install project   
-cd deep-learning-project-template 
-pip install -e .   
+# install requirements       
 pip install -r requirements.txt
  ```   
- Next, navigate to any file and run it.   
+##### Run on any CPU or GPU (only single GPU is supported)   
  ```bash
 # module folder
-cd project
+cd activelearning_ic
 
-# run module (example: mnist as your main contribution)   
-python lit_classifier_main.py    
+# run training  
+python main.py --sample_method [SAMPLE_METHOD] --cluster_mode [CLUSTER_MODE] --conf_mode [CONF_MODE] --args
 ```
+##### Run on HPC Cluster (only single GPU is supported)
+ The slurm scripts for all experiments are provided. Inside the script, 
+  ```bash
+#SBATCH -o /path/to/output/log
+#SBATCH -D /home/dir/activelearning_ic/
+```
+need to be set.
+Start training:
+ ```bash
+# module folder
+cd activelearning_ic
+
+# run module via slurm   
+sbatch [SCRIPT_NAME].sh
+
+# monitor output
+tail -f [OUT].log
+```
+
+
+##### Evaluate results   
+ ```bash
+```  
 
 ## Imports
 This project is setup as a package which means you can now easily import any file into any other file like so:
