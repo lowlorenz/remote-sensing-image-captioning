@@ -62,3 +62,8 @@ wandb==0.13.6
 wheel==0.38.4
 yarl==1.8.2
 scikit-learn==1.2.0
+seaborn==0.12.2
+matplotlib==3.7.0
+matplotlib-inline==0.1.6
+ipython==8.9.0
+nltk==3.8.1

@@ -23,7 +23,7 @@ This project consists of a active learning based remote sensing image captioning
 
 
 
-## How to run   
+## How to setup
 ```bash
 # clone project   
 git clone https://git.tu-berlin.de/wallburg/activelearning_ic.git
@@ -38,9 +38,10 @@ then
 
 ```bash
 git lfs clone  https://github.com/lowlorenz/NWPU-Captions.git
-mkdir NWPU-Captions/NWPU_images
 tar -xzf NWPU-Captions/NWPU_images.tar.gz -C NWPU-Captions
 ```  
+
+## How to run
 
 ##### Train a model on any CPU or GPU (only single GPU is supported)   
  ```bash

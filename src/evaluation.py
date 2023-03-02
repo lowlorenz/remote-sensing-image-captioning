@@ -8,20 +8,28 @@ import os
 import torch
 from pathlib import Path
 from transformers import GPT2TokenizerFast
+from rouge import Rouge
 
 
 nltk.download("wordnet")
 nltk.download("punkt")
 
 tokenizer = GPT2TokenizerFast.from_pretrained("nlpconnect/vit-gpt2-image-captioning")
+r = Rouge()
+
+
+def rouge(references: List[str], hypothesis: str):
+    return r.calc_score([hypothesis], references)
 
 
 def meteor(references: List[str], hypothesis: str):
-    references_tokens = [word_tokenize(reference) for reference in references]
-    hypothesis_tokens = word_tokenize(hypothesis)
+    # references_tokens = [word_tokenize(reference) for reference in references]
+    # hypothesis_tokens = word_tokenize(hypothesis)
+    splits_references = [reference.split() for reference in references]
+    split_hypothesis = hypothesis.split()
     return meteor_score(
-        references_tokens,
-        hypothesis_tokens,
+        splits_references,
+        split_hypothesis,
     )
 
 
@@ -34,7 +42,7 @@ def bleu(references: List[str], hypothesis: str):
 def save_hypothesis(predction_path: str, hypothesis: List[str]):
     # save the hypothesis in a txt file
     file_path = Path(predction_path, "hypothesis.txt")
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         for hypothesis_entry in hypothesis:
             file.write(hypothesis_entry)
             file.write("\n")
@@ -58,6 +66,11 @@ def load_hypothesis(prediction_path: str):
 
     # get all files in the prediction path
     all_files = os.listdir(prediction_path)
+    if "hypothesis.txt" in all_files:
+        hypothesis = (
+            open(Path(prediction_path, "hypothesis.txt"), "r").read().split("\n")
+        )
+        return hypothesis
 
     # filter them so only the ones img_ids and predicted_tokens are left
     id_files = [file for file in all_files if file.startswith("img_ids")]
@@ -95,12 +108,21 @@ def eval_validation(references_path: List[str], prediction_path: str):
 
     meteor_results = []
     bleu_results = []
+    rouge_results = []
     for hypo, reference in zip(hypothesis, references):
+
+        hypo = hypo.replace(".", "")
+        reference = [ref.replace(" .", "") for ref in reference]
+
         bl = bleu(reference, hypo)
         me = meteor(reference, hypo)
-        meteor_results.append(bl)
-        bleu_results.append(me)
+        ro = rouge(reference, hypo)
+
+        meteor_results.append(me)
+        bleu_results.append(bl)
+        rouge_results.append(ro)
 
     mean_bleu = np.mean(bleu_results)
     mean_meteor = np.mean(meteor_results)
-    return mean_bleu, mean_meteor
+    mean_rouge = np.mean(rouge_results)
+    return mean_bleu, mean_meteor, mean_rouge
