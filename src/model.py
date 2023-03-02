@@ -83,8 +83,8 @@ class ImageCaptioningSystem(pl.LightningModule):
         """Fits the model to a batch of data and returns the loss
 
         Args:
-            batch (_type_): Batch of the format (pixel_values, sentences_token, img_id, sentences_ids)
-            batch_idx (_type_): Number of the batch
+            batch: Batch of the format (pixel_values, sentences_token, img_id, sentences_ids)
+            batch_idx: Number of the batch
 
         Returns:
             _type_: CrossEntropyLoss of the batch

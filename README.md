@@ -171,3 +171,29 @@ cd activelearning_ic
 # predict  
 python validation_generator.py --ckpt [[NAME]_[SEED]-[TIME]-[CYCLE].ckpt]
 ```
+
+## Weights of the model trained on the full dataset
+
+Please find the models weights in the [tubcloud](https://tubcloud.tu-berlin.de/s/GwRYjWiqJz38ypH)
+
+## Code Overview
+
+```
+- project
+  - src
+    - main.py                  # main Python script for running the project
+    - utils.py                 # dataset logic for masking and loading the data
+    - evaluation.py            # logic for generating meteor, bleu and rouge-L scores
+    - model.py                 # logic on how to infer / train / predict / validate on the different data loaders
+    - prediction_writer.py     # defines how the data is logged during training
+    - rouge.py                 # logic for calculating the rouge-L score
+    - strategies.py            # logic for the different selection strategies
+    - validation_generator.py  # used to generate predictions on the validation set (easily adjustable for the test set)
+    - _evaluation_...          # scripts for generating the plots in this project
+      - metrics.iypnb                    # the script that is used for general analysis of our runs     
+      - confidence_per_word_length.ipynb # plots the confidence per word position
+      - full_model_on_testset.iypnb      # extensive analysis of the full model
+      - generation_on_testset.ipynb      # a notebook in which the a model can be run on the test set
+      - latent_space_visualization.iypnb # visualization of the bert latentspace using Umap
+      - sample_selection.ipnb            # used for analyizing the selected sample over the course of the strategy
+```
