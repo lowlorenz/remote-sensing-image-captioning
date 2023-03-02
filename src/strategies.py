@@ -40,13 +40,13 @@ def conf_and_cluster(
 
 
 def cluster_and_conf(
-    path, elems_to_add, expected_num_files, type="image", mode="least", conf_average="sentence"
+    path, elems_to_add, expected_num_files, embedding_type="image", mode="least", conf_average="sentence"
 ):
     # Cluster
     cluster_ids = diversity_based_sample(
         path=path,
         num_clusters=elems_to_add * 4,
-        type=type,
+        embedding_type=embedding_type,
         expected_num_files=expected_num_files,
     )
     # Select least confident data points

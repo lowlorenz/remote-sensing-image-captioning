@@ -293,7 +293,7 @@ def train(
             img_ids = strategies.diversity_based_sample(
                 path=unlabeled_prediction_path,
                 num_clusters=elements_to_add,
-                type=cluster_mode,
+                embedding_type=cluster_mode,
                 expected_num_files=num_gpus,
             )
 
@@ -302,7 +302,7 @@ def train(
                 path=unlabeled_prediction_path,
                 elems_to_add=elements_to_add,
                 expected_num_files=num_gpus,
-                type=cluster_mode,
+                embedding_type=cluster_mode,
                 mode=conf_mode,
                 conf_average=conf_average,
             )
@@ -312,7 +312,7 @@ def train(
                 path=unlabeled_prediction_path,
                 elems_to_add=elements_to_add,
                 expected_num_files=num_gpus,
-                type=cluster_mode,
+                embedding_type=cluster_mode,
                 mode=conf_mode,
                 conf_average=conf_average,
             )
