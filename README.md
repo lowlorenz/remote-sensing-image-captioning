@@ -86,6 +86,9 @@ None of our selected criteria was able to beat the random baseline in terms of o
 
 
 ## How to setup
+
+Our codebase was developed to run stabily under python==3.9.1. With newer or older releases, unexpected behaviour might occur.
+
 ```bash
 # clone project   
 git clone https://git.tu-berlin.de/wallburg/activelearning_ic.git
