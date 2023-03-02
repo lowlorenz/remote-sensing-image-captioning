@@ -81,7 +81,7 @@ Similarly, we concatenated the criteria in the reverse order which does not offe
 
 None of our selected criteria was able to beat the random baseline in terms of our three measured metrics, the BLEU-4, Rouge-L and METEOR scores. While the single criteria achieved results similar to the baseline results, the fusion of criteria worked significantly worse. We have identified a problem in our pipeline which leads to this unexpected behavior but have yet to fix it. In our paper, we propose adjustments to the single criteria and new methods which could be implemented in the future and have the potential of improving the active learning process. Our pipeline proved to be well-suited for the remote sensing image captioning as we were able to achieve test results better than the state of the art after training on the full dataset without active learning. 
 
-![metrics](imgs/photo_2023-03-01_14-15-40.jpg)
+![metrics](imgs/all.png)
 
 
 
