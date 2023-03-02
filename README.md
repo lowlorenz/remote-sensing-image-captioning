@@ -21,6 +21,8 @@ Conference
 Our final submission for the TU Berlin course "Computer Vision for Remote Sensing" (Winter 22/23).
 This project consists of a active learning based remote sensing image captioning system which has been trained using different active learning criteria.
 
+
+
 ## How to run   
 ```bash
 # clone project   
@@ -29,6 +31,15 @@ git clone https://git.tu-berlin.de/wallburg/activelearning_ic.git
 # install requirements       
 pip install -r requirements.txt
  ```   
+
+## Get the dataset
+1. install git lfs following  [this](https://github.com/git-lfs/git-lfs/blob/main/INSTALLING.md)
+then
+
+```bash
+git lfs clone  https://github.com/lowlorenz/NWPU-Captions.git
+```  
+
 ##### Train a model on any CPU or GPU (only single GPU is supported)   
  ```bash
 # module folder
