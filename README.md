@@ -29,7 +29,7 @@ git clone https://git.tu-berlin.de/wallburg/activelearning_ic.git
 # install requirements       
 pip install -r requirements.txt
  ```   
-##### Run on any CPU or GPU (only single GPU is supported)   
+##### Train a model on any CPU or GPU (only single GPU is supported)   
  ```bash
 # module folder
 cd activelearning_ic
@@ -37,7 +37,7 @@ cd activelearning_ic
 # run training  
 python main.py --sample_method [SAMPLE_METHOD] --cluster_mode [CLUSTER_MODE] --conf_mode [CONF_MODE] --args
 ```
-##### Run on HPC Cluster (only single GPU is supported)
+##### Train a model on HPC Cluster (only single GPU is supported)
  The slurm scripts for all experiments are provided. Inside the script, 
   ```bash
 #SBATCH -o /path/to/output/log
@@ -55,29 +55,26 @@ sbatch [SCRIPT_NAME].sh
 # monitor output
 tail -f [OUT].log
 ```
+##### Validate a trained model (CPU or single GPU)
+This automatically selects the validation set and predicts on it using a pretrained model
+  ```bash
+# module folder
+cd activelearning_ic
 
+# predict  
+python validation_generator.py --ckpt [[NAME]_[SEED]-[TIME]-[CYCLE].ckpt]
+```
 
-##### Evaluate results   
+##### Evaluate results (CPU)
+At each validation step, the predicted captions are written to (filename). The METEOR, BLEU and Rouge-L score are calculated inside a jupyter notebook after the whole cycle by comparison of the predicted captions and reference captions.     
  ```bash
+ # module folder
+cd activelearning_ic
+
+# start notebook
+jupyter-notebook
 ```  
+In evaluation.ipynb:
 
-## Imports
-This project is setup as a package which means you can now easily import any file into any other file like so:
-```python
-from project.datasets.mnist import mnist
-from project.lit_classifier_main import LitClassifier
-from pytorch_lightning import Trainer
+## Structure
 
-# model
-model = LitClassifier()
-
-# data
-train, val, test = mnist()
-
-# train
-trainer = Trainer()
-trainer.fit(model, train, val)
-
-# test using the best model!
-trainer.test(test_dataloaders=test)
-``` 
