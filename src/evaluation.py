@@ -59,16 +59,16 @@ def load_references(references_path: List[str]):
     return references
 
 
-def load_hypothesis(prediction_path: str):
+def load_hypothesis(prediction_path: str, hypothesis_file: str = "hypothesis.txt"):
 
     # load the ids and predicted tokens results from the different gpus(rank)
     # and concatenate them
 
     # get all files in the prediction path
     all_files = os.listdir(prediction_path)
-    if "hypothesis.txt" in all_files:
+    if hypothesis_file in all_files:
         hypothesis = (
-            open(Path(prediction_path, "hypothesis.txt"), "r").read().split("\n")
+            open(Path(prediction_path, hypothesis_file), "r").read().split("\n")
         )
         return hypothesis
 
