@@ -185,4 +185,3 @@ if __name__ == "__main__":
     model = ImageCaptioningSystem(0.01)
 
     model.training_step(batch, 0)
-    # pixel_values, sentences, img_id, sentences_ids = batch

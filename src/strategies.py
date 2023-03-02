@@ -59,7 +59,6 @@ def cluster_and_conf(
 
     return torch.tensor(returned_ids)
 
-# def conf_in_cluster()
 
 def load_embeddings(
     path: str,
@@ -121,7 +120,6 @@ def load_text_embeddings(
 
     ids = torch.cat([torch.load(Path(path, file)) for file in id_files], axis=0)
     ids = ids.detach().cpu().numpy()
-    # embeddings = embeddings.detach().cpu().numpy()
 
     return embeddings, ids
 

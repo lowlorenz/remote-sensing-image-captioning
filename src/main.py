@@ -1,28 +1,14 @@
 import click
-
 from dataset import NWPU_Captions
 from torchvision.transforms import ToTensor
 from model import ImageCaptioningSystem
 import pytorch_lightning as pl
-
-# from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from prediction_writer import PredictionWriter
 import torch
-
-# from torch.utils.data import DataLoader
-# import wandb
 import datetime
 import strategies
 import os
 from pathlib import Path
-
-# from sklearn.model_selection import train_test_split
-# from evaluation import eval_validation
-
-
-# with open("secrets.txt", "r") as config_key:
-#     api_key = config_key.readline().strip()
 
 
 def get_data_loaders(
@@ -188,36 +174,15 @@ def train(
 
     for cycle in range(max_cycles):
         print(f"----- CYCLE {cycle} -----")
-        early_stopping_callback = EarlyStopping(monitor="val/loss_epoch", mode="min")
         prediction_writer = PredictionWriter(
             write_interval="epoch",
             root_dir=str(prediction_path_root),
             strategy=sample_method,
         )
 
-        # wandb_run_name = f"{run_name}-{cycle}"
-        # wandb.login(key=api_key)
-
-        # if debug:
-        #     wandb_logger = WandbLogger(
-        #         mode="disabled",
-        #         project="active_learning",
-        #       config=config,
-        #         name=wandb_run_name,
-        #         group=group_name,
-        #     )
-
-        # if True:
-        #     wandb_logger = WandbLogger(
-        #         project="active_learning",
-        #         config=config,
-        #         name=wandb_run_name,
-        #         group=group_name,
-        #     )
-
-        # print("Setup Trainer ...")
+        print("Set up Trainer ...")
         trainer = pl.Trainer(
-            callbacks=[prediction_writer],  # , early_stopping_callback],
+            callbacks=[prediction_writer],
             accelerator=device_type,
             devices=num_devices,
             strategy=strategy,
@@ -228,11 +193,10 @@ def train(
             limit_val_batches=limit_val_batches,
             log_every_n_steps=log_every_n_steps,
             precision=16,
-            # logger=wandb_logger,
             num_sanity_val_steps=0,
         )
 
-        # print("Loading model...")
+        print("Loading model...")
         model = ImageCaptioningSystem(
             learning_rate, device_type, sample_method, mutliple_sentence_loss
         )
@@ -257,7 +221,6 @@ def train(
 
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
-        # wandb_logger.experiment.finish()
 
         if cycle == max_cycles - 1:
             break

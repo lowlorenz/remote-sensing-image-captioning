@@ -23,8 +23,6 @@ def rouge(references: List[str], hypothesis: str):
 
 
 def meteor(references: List[str], hypothesis: str):
-    # references_tokens = [word_tokenize(reference) for reference in references]
-    # hypothesis_tokens = word_tokenize(hypothesis)
     splits_references = [reference.split() for reference in references]
     split_hypothesis = hypothesis.split()
     return meteor_score(
@@ -52,7 +50,7 @@ def load_references(references_path: List[str]):
     # load the references files given by the path and then split them line by line
     # result: [ [ref1, ref1, ...], [ref2, ref2, ...], ...]
     references = [open(path, "r").read().split("\n") for path in references_path]
-    # tranform them to a list of format: [ [ref1, ref2, ...], [ref1, ref2, ...], ...]
+    # transform them to a list of format: [ [ref1, ref2, ...], [ref1, ref2, ...], ...]
     # this trick is explained in https://www.geeksforgeeks.org/python-unzip-a-list-of-tuples/
     references = list(zip(*references))
 
