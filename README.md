@@ -29,7 +29,7 @@ https://github.com/HaiyanHuang98/NWPU-Captions
 
 As an example, this is an image of the NWPU-Captions dataset together with its five reference sentences.
 
-![stadium](https://raw.githubusercontent.com/wallburg/activelearning_ic/imgs/stadium.jpg)
+![stadium](https://git.tu-berlin.de/wallburg/activelearning_ic/-/blob/main/imgs/stadium.png)
 
 *The stadium is shaped like a ring.*
 
@@ -57,7 +57,7 @@ Uncertainty criteria aim to find datapoints closely located to the decision boun
 
 We infer on the unlabeled data and assign each datapoint an uncertainty value which corresponds to the probability with which the prediction was emitted. As in a generated sentence, each word is emitted with a certain probability, we only consider the word which shows lowest confidence. In recurrent sentence generation, later words are emitted with high probability and low variance because they strongly depend on prior words. 
 
-![conf_per_word](https://raw.githubusercontent.com/wallburg/activelearning_ic/imgs/stadium.jpg)
+![conf_per_word](https://git.tu-berlin.de/wallburg/activelearning_ic/-/blob/main/imgs/conf_by_word.png)
 
 This is why we only consider the word of lowest confidence which is usually located at the beginning of a sentence.
 
@@ -85,7 +85,7 @@ Similarly, we concatenated the criteria in the reverse order which does not offe
 
 None of our selected criteria was able to beat the random baseline in terms of our three measured metrics, the Rouge-L, METEOR and BLEU-4 scores. In our paper, we propose adjustments and new methods which could be implemented in the future and have the potential of improving the active learning process.
 
-![metrics](https://raw.githubusercontent.com/wallburg/activelearning_ic/imgs/stadium.jpg)
+![metrics](https://git.tu-berlin.de/wallburg/activelearning_ic/-/blob/main/imgs/conf_by_word.png)
 
 
 
