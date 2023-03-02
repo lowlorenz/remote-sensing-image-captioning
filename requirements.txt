@@ -49,11 +49,10 @@ smmap==5.0.0
 tensorboardX==2.5.1
 termcolor==2.1.1
 tokenizers==0.13.2
-tomli==2.0.1
-torch==1.10.1
-torchaudio==0.10.1
+torch==1.13.1
+torchaudio==0.13.1
 torchmetrics==0.11.0
-torchvision==0.11.2
+torchvision==0.14.1
 tqdm==4.64.1
 transformers==4.25.1
 typing_extensions==4.4.0

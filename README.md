@@ -150,7 +150,7 @@ tail -f [OUT].log
 | val_check_interval | 1.0 | float | Validation check interval. |
 | num_devices | 1 | int | Number of devices to train on. |
 | num_nodes | 1 | int | Number of nodes to train on. |
-| ckpt_path | None | str | Path to checkpoint to resume training. |
+| ckpt_path | "checkpoints" | str | Path to store or load checkpoint. |
 | mode | "train" | str | Choose between train and test mode. |
 | seed | 42 | int | Global random seed. |
 | conf_mode | "least" | str | Whether to sample based on "least" confidence or "margin" of confidence. |

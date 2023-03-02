@@ -76,7 +76,7 @@ def get_data_loaders(
 @click.option("--val_check_interval", default=1.0, help="Validation check interval.")
 @click.option("--num_devices", default=1, help="Number of devices to train on.")
 @click.option("--num_nodes", default=1, help="Number of nodes to train on.")
-@click.option("--ckpt_path", default=None, help="Path to checkpoint to resume training.")
+@click.option("--ckpt_path", default="checkpoints", help="Path to store or load checkpoint.")
 @click.option("--mode", default="train", help="Choose between train and test mode.")
 @click.option("--seed", default=42, help="Global random seed.")
 @click.option("--conf_mode", default="least", help="Whether to sample based on \"least\" confidence or \"margin\" of confidence")
@@ -253,9 +253,7 @@ def train(
             )
 
         if not debug:
-            trainer.save_checkpoint(
-                f"/scratch/activelearning-ic/{run_name}-{date_time_str}-{cycle}.ckpt"
-            )
+            trainer.save_checkpoint(os.path.join(ckpt_path, f"{run_name}-{date_time_str}-{cycle}.ckpt"))
 
         prediction_writer.update_mode("val")
         trainer.predict(model, val_loader)
