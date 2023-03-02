@@ -39,7 +39,7 @@ We set up an active learning framework which is based on the idea of training in
 
 #### 1. Baseline: Random selection
 
-Simulating an active learning process by randomly sampling from the unlabeled dataset serves as a baseline for the smapling critera.
+Simulating an active learning process by randomly sampling from the unlabeled dataset serves as a baseline for the sampling critera.
 
 #### 2. Upper bound: Full dataset
 
