@@ -254,7 +254,7 @@ def train(
 
         if not debug:
             trainer.save_checkpoint(
-                f"/home/users/w/wallburg/checkpoints/{run_name}-{date_time_str}-{cycle}.ckpt"
+                f"/scratch/activelearning-ic/{run_name}-{date_time_str}-{cycle}.ckpt"
             )
 
         prediction_writer.update_mode("val")

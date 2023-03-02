@@ -13,4 +13,4 @@
 
 module load nvidia/cuda/11.2
 
-srun python main.py --debug --batch_size 12 --max_cycles 9 --epochs 10 --run_name confidence+cluster_2 --sample_method cluster+confidence --cluster_mode image --seed 2
+srun python main.py --batch_size 12 --max_cycles 9 --epochs 10 --run_name confidence+cluster_2 --sample_method cluster+confidence --cluster_mode image --seed 2 --conf_average word --conf_mode margin

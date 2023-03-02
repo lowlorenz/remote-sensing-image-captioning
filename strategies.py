@@ -23,7 +23,7 @@ def get_tokenizer():
 
 
 def conf_and_cluster(
-    path, elems_to_add, expected_num_files, type="image", mode="least", conf_average="sentence"
+    path, elems_to_add, expected_num_files, embedding_type="image", mode="least", conf_average="sentence"
 ):
     # Select least confident data points
     least_conf_ids = confidence_sample(path, elems_to_add * 4, mode, conf_average)
@@ -31,7 +31,7 @@ def conf_and_cluster(
     returned_ids = diversity_based_sample(
         path=path,
         num_clusters=elems_to_add,
-        type=type,
+        embedding_type=embedding_type,
         expected_num_files=expected_num_files,
         conf_ids=least_conf_ids,
     )
@@ -45,30 +45,31 @@ def cluster_and_conf(
     # Cluster
     cluster_ids = diversity_based_sample(
         path=path,
-        num_clusters=elems_to_add,
+        num_clusters=elems_to_add * 4,
         type=type,
         expected_num_files=expected_num_files,
     )
     # Select least confident data points
     returned_ids = confidence_sample(
         path=path,
-        elems_to_add=elems_to_add * 4,
+        elems_to_add=elems_to_add,
         mode=mode,
         average=conf_average,
         cluster_ids=cluster_ids)
 
     return torch.tensor(returned_ids)
 
+# def conf_in_cluster()
 
 def load_embeddings(
     path: str,
-    type: str,
+    embedding_type: str,
     expected_num_files: int,
     conf_ids=None,
 ):
-    if type == "image":
+    if embedding_type == "image":
         embeddings, ids = load_image_embeddings(path, expected_num_files)
-    elif type == "text":
+    elif embedding_type == "text":
         embeddings, ids = load_text_embeddings(path, expected_num_files)
 
     if conf_ids is not None:
@@ -206,11 +207,11 @@ def confidence_sample(path, elems_to_add, mode="least", average="sentence", clus
 def diversity_based_sample(
     path: str,
     num_clusters: int,
-    type: str,
+    embedding_type: str,
     expected_num_files: int,
     conf_ids: torch.tensor = None,
 ):
-    embeddings, ids = load_embeddings(path, type, expected_num_files, conf_ids)
+    embeddings, ids = load_embeddings(path, embedding_type, expected_num_files, conf_ids)
 
     cluster = KMeans(n_clusters=num_clusters, random_state=0).fit(embeddings)
     label = cluster.labels_
