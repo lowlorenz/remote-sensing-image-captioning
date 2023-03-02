@@ -171,16 +171,3 @@ cd activelearning_ic
 # predict  
 python validation_generator.py --ckpt [[NAME]_[SEED]-[TIME]-[CYCLE].ckpt]
 ```
-
-##### Evaluate results (CPU)
-At each validation step, the predicted captions are written to (filename). The METEOR, BLEU and Rouge-L score are calculated inside a jupyter notebook after the whole cycle by comparison of the predicted captions and reference captions.     
- ```bash
- # module folder
-cd activelearning_ic
-
-# start notebook
-jupyter-notebook
-```  
-In evaluation.ipynb:
-
-## Structure
