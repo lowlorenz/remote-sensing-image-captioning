@@ -21,6 +21,8 @@ Conference
 Our final submission for the TU Berlin course "Computer Vision for Remote Sensing" (Winter 22/23).
 The goal of our project was to compare different sampling critera for active learning applied to a remote sensing image captioning system. We used an encoder-decoder structure consisting of a Vision Transformer and the GPT-2 language model as our pipeline (https://huggingface.co/nlpconnect/vit-gpt2-image-captioning) and trained it on the NWPU-Captions dataset, the largest remote sensing image captioning dataset consisting of 31500 RGB images with five human produced captions each (https://github.com/HaiyanHuang98/NWPU-Captions).
 
+To the best of our knowledge this model has the highest reported image captioning capabilities that were published to this date. The focus of this report however lies on our analysis of active learning in the context of remote sensing image captioning.
+
 As an example, this is an image of the NWPU-Captions dataset together with its five reference sentences.
 
 ![stadium](imgs/stadium.jpg)
