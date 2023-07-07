@@ -1,7 +1,9 @@
 ---
 
 <div align="center">    
+ 
 **To the best of our knowledge this model has the highest reported image captioning capabilities that were published to this date on the reported dataset. The focus of this report however lies on our analysis of active learning in the context of remote sensing image captioning.**
+ 
 # Active Learning Criteria for Remote Sensing Image Captioning     
 <!--  
 [![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539)
