@@ -68,7 +68,6 @@ def tokenize_sentences(sentences):
     sentence_tensor = np.zeros((len(sentences), 5, 56), dtype=int)
     for i in range(len(sentences)):
         for j in range(5):
-
             sentence_tensor[i, j] = tokenizer(
                 sentences[i][j],
                 max_length=56,
@@ -90,9 +89,6 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.img_ids = annotations["img_id"]
         self.sentences_ids = annotations["sentences_id"]
 
-        self.mask = np.ones_like(self.images, dtype=bool)
-        self.update_masked_arrays()
-
         self.transform = transform
         self.seed = seed
 
@@ -101,13 +97,10 @@ class NWPU_Captions(torch.utils.data.Dataset):
         )
 
     def __len__(self):
-        return len(self.masked_images)
-
-    def max_length(self):
         return len(self.images)
 
     def __getitem__(self, idx):
-        image = PIL.Image.open(self.masked_images[idx])
+        image = PIL.Image.open(self.images[idx])
 
         if self.transform:
             image = self.transform(image)
@@ -116,53 +109,11 @@ class NWPU_Captions(torch.utils.data.Dataset):
             images=image, return_tensors="pt"
         ).pixel_values
 
-        sentences = self.masked_sentences[idx]
-        img_id = self.masked_img_ids[idx]
-        sentences_ids = self.masked_sentences_ids[idx]
+        sentences = self.sentences[idx]
+        img_id = self.img_ids[idx]
+        sentences_ids = self.sentences_ids[idx]
 
         return pixel_values, sentences, img_id, sentences_ids
-
-    def update_masked_arrays(self):
-        # Update the masked arrays
-        self.masked_images = self.images[self.mask]
-        self.masked_sentences = self.sentences[self.mask]
-        self.masked_img_ids = self.img_ids[self.mask]
-        self.masked_sentences_ids = self.sentences_ids[self.mask]
-
-    def flip_mask(self):
-        self.mask = ~self.mask
-        self.update_masked_arrays()
-
-    def add_random_labels(self, num_elements):
-        # Update the mask, set num elementes to true
-        idx = np.argwhere(self.mask == False)
-        np.random.seed(self.seed)
-        np.random.shuffle(idx)
-        idx = idx[:num_elements]
-        self.mask[idx] = True
-
-        self.update_masked_arrays()
-
-    def add_labels_by_img_id(self, query: torch.Tensor):
-        # query are the tensors that should be added to the mask
-        # it is unsqueezed to make it a 2D tensor from [query1, query2 ....]  to [[query1], [query2], ...]
-        query = query.unsqueeze(dim=1)
-        # ids are all of the image ids in the dataset
-        ids = torch.tensor(self.img_ids)
-        # compare [id1, id2, id3, ...] with [[query1], [query2]...] row wise.
-        # if any id is equal to the query, one element in the (ids == query) array row is true at the specific index so it looks like:
-        # [ [False, False, True], 
-        #   [True,  False, False] ]  if the query is [id3, id1]
-        # then it is reduced to [True, False, True] by taking the any() of the columns
-        mask = (ids == query).any(dim=0).numpy()
-        # add the mask to the current mask
-        self.mask = mask + self.mask
-        # update the masked arrays
-        self.update_masked_arrays()
-
-    def set_empty_mask(self):
-        self.mask = np.zeros_like(self.images, dtype=bool)
-        self.update_masked_arrays()
 
 
 if __name__ == "__main__":
@@ -182,6 +133,9 @@ if __name__ == "__main__":
     it = iter(test_loader)
     batch = next(it)
 
-    model = ImageCaptioningSystem(0.01)
+    model = ImageCaptioningSystem(
+        lr=0.001,
+        mutliple_sentence_loss=False,
+    )
 
     model.training_step(batch, 0)

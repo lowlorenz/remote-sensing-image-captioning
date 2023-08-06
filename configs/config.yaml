@@ -1,0 +1,12 @@
+seed: 42
+data_path: "NWPU-Captions"
+run_name: simple_run
+
+logging:
+  log_every_n_steps: 150
+
+training:
+  lr: 0.00001
+  mutliple_sentence_loss: False
+  batch_size: 32
+  max_epochs: 20
