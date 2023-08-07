@@ -17,3 +17,8 @@ results
 logs
 .log
 checkpoints
+*.sif
+*.out
+.hydra
+llama-huggingface
+outputs

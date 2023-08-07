@@ -1,12 +1,14 @@
 seed: 42
-data_path: "NWPU-Captions"
+data_path: "/data"
 run_name: simple_run
 
 logging:
   log_every_n_steps: 150
 
 training:
-  lr: 0.00001
+  lr: 0.0001
   mutliple_sentence_loss: False
-  batch_size: 32
-  max_epochs: 20
+  batch_size: 1
+  max_epochs: 50
+  num_workers: 16
+  num_devices: 3

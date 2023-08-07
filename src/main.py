@@ -10,42 +10,6 @@ import hydra
 from pathlib import Path
 from omegaconf import DictConfig, OmegaConf
 import logging
-import wandb
-
-
-def get_data_loaders(
-    batch_size, train_set=None, val_set=None, test_set=None, unlabeled_set=None
-):
-    loaders = []
-
-    if train_set:
-        train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=batch_size, shuffle=True, num_workers=4
-        )
-        loaders.append(train_loader)
-
-    if val_set:
-        val_loader = torch.utils.data.DataLoader(
-            val_set, batch_size=batch_size, shuffle=False, num_workers=4
-        )
-        loaders.append(val_loader)
-
-    if test_set:
-        test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=batch_size, shuffle=False, num_workers=4
-        )
-        loaders.append(test_loader)
-
-    if unlabeled_set:
-        unlabeled_loader = torch.utils.data.DataLoader(
-            unlabeled_set, batch_size=batch_size, shuffle=False, num_workers=4
-        )
-        loaders.append(unlabeled_loader)
-
-    if len(loaders) == 1:
-        return loaders[0]
-
-    return tuple(loaders)
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
@@ -74,6 +38,20 @@ def train(cfg: DictConfig):
         split="val",
         transform=ToTensor(),
     )
+    
+    train_loader = torch.utils.data.DataLoader(
+        train_set,
+        batch_size=cfg.training.batch_size,
+        shuffle=True,
+        num_workers=cfg.training.num_workers
+    )
+    
+    val_loader = torch.utils.data.DataLoader(
+        val_set,
+        batch_size=cfg.training.batch_size,
+        shuffle=False, 
+        num_workers=cfg.training.num_workers
+    )
 
     logger = WandbLogger(
         "NWPU-Captions",
@@ -97,18 +75,17 @@ def train(cfg: DictConfig):
         callbacks=[checkpoint_callback, early_stopping_callback],
         accelerator="gpu",
         max_epochs=cfg.training.max_epochs,
-        log_every_n_steps=cfg["logging"]["log_every_n_steps"],
+        log_every_n_steps=cfg.logging.log_every_n_steps,
         precision=16,
         num_sanity_val_steps=1,
         logger=logger,
+        enable_progress_bar=False,
+        num_nodes=1,
+        devices=cfg.training.num_devices,
+        strategy="deepspeed_stage_2",
     )
 
     model = ImageCaptioningSystem(cfg.training.lr, cfg.training.mutliple_sentence_loss)
-    train_loader, val_loader = get_data_loaders(
-        cfg.training.batch_size,
-        train_set=train_set,
-        val_set=val_set,
-    )
     trainer.fit(model, train_loader, val_loader)
 
 

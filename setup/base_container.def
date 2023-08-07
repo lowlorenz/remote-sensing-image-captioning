@@ -1,0 +1,6 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
+
+#==> 6. Commands that are run inside the container as root during the container build process but these commands are not written anywhere in the container. If environment variables are known only during container build time, define them here and they get written to /.apptainer.d/env/90-environment.sh.
+%post
+  apt-get update

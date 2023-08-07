@@ -1,4 +1,5 @@
-from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast
+from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast, VisionEncoderDecoderModel, LlamaConfig, ViTConfig, LlamaForCausalLM, ViTModel, LlamaTokenizer
+import transformers
 from peft import LoraConfig, TaskType, get_peft_model
 
 import pandas as pd
@@ -7,6 +8,8 @@ import torch
 import random
 from torchmetrics.text import BLEUScore, ROUGEScore
 import torchmetrics
+
+transformers.utils.logging.disable_progress_bar()
 
 
 class ImageCaptioningSystem(pl.LightningModule):
@@ -18,23 +21,31 @@ class ImageCaptioningSystem(pl.LightningModule):
         super().__init__()
         """_summary_
         """
-        self.model = VisionEncoderDecoderModel.from_pretrained(
-            "nlpconnect/vit-gpt2-image-captioning",
-        )
 
-        config = LoraConfig(
-            r=16,
-            lora_alpha=16,
-            target_modules=["query", "value"],
-            lora_dropout=0.1,
-            bias="none",
-            modules_to_save=["classifier"],
-        )
-        self.model = get_peft_model(self.model, config)
+        ## GPT2
+        # self.model = VisionEncoderDecoderModel.from_pretrained(
+        #     "nlpconnect/vit-gpt2-image-captioning",
+        # )
+        # self.tokenizer = GPT2TokenizerFast.from_pretrained(
+        #     "nlpconnect/vit-gpt2-image-captioning"
+        # )
 
-        self.tokenizer = GPT2TokenizerFast.from_pretrained(
-            "nlpconnect/vit-gpt2-image-captioning"
-        )
+        ## Llama2
+        self.model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained("google/vit-base-patch16-224", "/llama2")
+        self.tokenizer = LlamaTokenizer.from_pretrained("/llama2", local_files_only=True)
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        # config = LoraConfig(
+        #     r=16,
+        #     lora_alpha=16,
+        #     target_modules=["query", "value"],
+        #     lora_dropout=0.1,
+        #     bias="none",
+        #     modules_to_save=["classifier"],
+        # )
+        # self.model = get_peft_model(self.model, config)
+
+      
 
         self.lr = lr
         self.mutliple_sentence_loss = mutliple_sentence_loss
@@ -45,7 +56,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()
-        self.max_tokens = 56
+        self.max_tokens = 120
 
         metrics = torchmetrics.MetricCollection(
             [BLEUScore(), ROUGEScore(rouge_keys="rougeL")]
@@ -112,8 +123,8 @@ class ImageCaptioningSystem(pl.LightningModule):
         )
 
         logs = self.train_metrics(captions, sentences_text)
-        self.log_dict(logs, on_step=True, on_epoch=True)
-        self.log("train_loss", loss, on_step=True, on_epoch=True)
+        self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
 
         # # if this is the main process, log examples every 100 batches
         # if batch_idx % 100 != 0:
@@ -152,8 +163,8 @@ class ImageCaptioningSystem(pl.LightningModule):
         )
 
         logs = self.val_metrics(captions, sentences_text)
-        self.log_dict(logs, on_step=True, on_epoch=True)
-        self.log("val_loss", loss, on_step=True, on_epoch=True)
+        self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
 
         # # log some examples
         # if batch_idx % 5 != 0:

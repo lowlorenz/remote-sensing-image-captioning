@@ -6,7 +6,7 @@ import json
 import unicodedata
 import numpy as np
 from pathlib import Path
-from transformers import ViTFeatureExtractor, GPT2TokenizerFast
+from transformers import ViTFeatureExtractor, GPT2TokenizerFast, LlamaTokenizer
 from torchvision.transforms import ToTensor
 
 
@@ -59,18 +59,21 @@ def vectorize_annotations(dataset):
 
 
 def tokenize_sentences(sentences):
-    tokenizer = GPT2TokenizerFast.from_pretrained(
-        "nlpconnect/vit-gpt2-image-captioning"
-    )
+    # tokenizer = GPT2TokenizerFast.from_pretrained(
+    #     "nlpconnect/vit-gpt2-image-captioning"
+    # )
+
+    tokenizer = LlamaTokenizer.from_pretrained("/llama2", local_files_only=True)
+    tokenizer.pad_token = tokenizer.eos_token
 
     # Convert the sentences to token-tensors by looping over the
     # sentences list and calling the tokenizer on every entry
-    sentence_tensor = np.zeros((len(sentences), 5, 56), dtype=int)
+    sentence_tensor = np.zeros((len(sentences), 5, 120), dtype=int)
     for i in range(len(sentences)):
         for j in range(5):
             sentence_tensor[i, j] = tokenizer(
                 sentences[i][j],
-                max_length=56,
+                max_length=120,
                 padding="max_length",
                 return_tensors="np",
             ).input_ids
