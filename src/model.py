@@ -1,6 +1,17 @@
-from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast, VisionEncoderDecoderModel, LlamaConfig, ViTConfig, LlamaForCausalLM, ViTModel, LlamaTokenizer
+from transformers import (
+    VisionEncoderDecoderModel,
+    GPT2TokenizerFast,
+    VisionEncoderDecoderModel,
+    LlamaConfig,
+    ViTConfig,
+    LlamaForCausalLM,
+    ViTModel,
+    LlamaTokenizer,
+    AutoProcessor,
+)
 import transformers
 from deepspeed.ops.adam import FusedAdam, DeepSpeedCPUAdam
+from torch.optim import Adam
 from peft import LoraConfig, TaskType, get_peft_model
 
 import pandas as pd
@@ -9,6 +20,7 @@ import torch
 import random
 from torchmetrics.text import BLEUScore, ROUGEScore
 import torchmetrics
+from omegaconf import OmegaConf
 
 transformers.utils.logging.disable_progress_bar()
 
@@ -16,25 +28,39 @@ transformers.utils.logging.disable_progress_bar()
 class ImageCaptioningSystem(pl.LightningModule):
     def __init__(
         self,
-        lr: float,
-        mutliple_sentence_loss: bool,
+        cfg: OmegaConf,
     ):
         super().__init__()
         """_summary_
         """
 
-        ## GPT2
-        # self.model = VisionEncoderDecoderModel.from_pretrained(
-        #     "nlpconnect/vit-gpt2-image-captioning",
-        # )
-        # self.tokenizer = GPT2TokenizerFast.from_pretrained(
-        #     "nlpconnect/vit-gpt2-image-captioning"
-        # )
+        self.cfg = cfg
 
-        ## Llama2
-        self.model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained("google/vit-base-patch16-224", "/llama2")
-        self.tokenizer = LlamaTokenizer.from_pretrained("/llama2", local_files_only=True)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        if self.cfg.model.name == "gpt2":
+            self.model = VisionEncoderDecoderModel.from_pretrained(
+                "nlpconnect/vit-gpt2-image-captioning",
+            )
+            self.tokenizer = GPT2TokenizerFast.from_pretrained(
+                "nlpconnect/vit-gpt2-image-captioning"
+            )
+            self.model.decoder.config.decoder_start_token_id = (
+                self.model.decoder.config.bos_token_id
+            )
+
+        elif self.cfg.model.name == "llama2":
+            self.model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained(
+                "google/vit-base-patch16-224", cfg.model.local_path
+            )
+            self.tokenizer = LlamaTokenizer.from_pretrained(
+                cfg.model.local_path, local_files_only=True
+            )
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.model.decoder.config.decoder_start_token_id = (
+                self.model.decoder.config.bos_token_id
+            )
+
+        self.cross_entropy = torch.nn.CrossEntropyLoss()
+        self.max_tokens = 120
 
         # config = LoraConfig(
         #     r=16,
@@ -46,24 +72,17 @@ class ImageCaptioningSystem(pl.LightningModule):
         # )
         # self.model = get_peft_model(self.model, config)
 
-      
+        if self.cfg.compute.logging:
+            self.train_examples = pd.DataFrame(
+                columns=["epoch", "step", "truth", "prediction"]
+            )
+            self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
-        self.lr = lr
-        self.mutliple_sentence_loss = mutliple_sentence_loss
-
-        # self.train_examples = pd.DataFrame(
-        #     columns=["epoch", "step", "truth", "prediction"]
-        # )
-        # self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
-
-        self.cross_entropy = torch.nn.CrossEntropyLoss()
-        self.max_tokens = 120
-
-        # metrics = torchmetrics.MetricCollection(
-        #     [BLEUScore(), ROUGEScore(rouge_keys="rougeL")]
-        # )
-        # self.train_metrics = metrics.clone(prefix="train_")
-        # self.val_metrics = metrics.clone(prefix="val_")
+            metrics = torchmetrics.MetricCollection(
+                [BLEUScore(), ROUGEScore(rouge_keys="rougeL")]
+            )
+            self.train_metrics = metrics.clone(prefix="train_")
+            self.val_metrics = metrics.clone(prefix="val_")
 
     def forward(self, x):
         return self.model(x)
@@ -72,7 +91,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         """calculate loss for a sentence - similar to the implementation of the model
         https://github.com/huggingface/transformers/blob/main/src/transformers/models/vision_encoder_decoder/modeling_vision_encoder_decoder.py#L628
         """
-        if self.mutliple_sentence_loss:
+        if self.cfg.training.mutliple_sentence_loss:
             label = tokens[:, 0, :].long().contiguous()
             output = self.model(pixel_values=pixel_values, labels=label)
 
@@ -109,37 +128,40 @@ class ImageCaptioningSystem(pl.LightningModule):
         pixel_values, sentences_token, img_id, sentences_ids = batch
         batch_size = len(img_id)
 
+        pixel_values = pixel_values.squeeze(dim=1)
+
+        loss, logits = self.calculate_loss(pixel_values, sentences_token)
+
+        self.log("train_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
+
+        if not self.cfg.compute.logging:
+
+            return loss
         sentences_text = [
             self.tokenizer.batch_decode(sentences_token[i], skip_special_tokens=True)
             for i in range(batch_size)
         ]
 
-        pixel_values = pixel_values.squeeze(dim=1)
-
-        loss, logits = self.calculate_loss(pixel_values, sentences_token)
-
         # detokenize human readable captions
-        # captions = self.tokenizer.batch_decode(
-        #     logits.argmax(dim=-1), skip_special_tokens=True
-        # )
+        captions = self.tokenizer.batch_decode(
+            logits.argmax(dim=-1), skip_special_tokens=True
+        )
 
-        # logs = self.train_metrics(captions, sentences_text)
-        # self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
-        self.log("train_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
+        logs = self.train_metrics(captions, sentences_text)
+        self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
 
-        # # if this is the main process, log examples every 100 batches
-        # if batch_idx % 100 != 0:
-        #     return loss
+        # if this is the main process, log examples every 100 batches
+        if batch_idx % 100 != 0:
+            return loss
 
-        # data = {
-        #     "epoch": [self.current_epoch] * batch_size,
-        #     "step": [self.global_step] * batch_size,
-        #     "truth": sentences_text,
-        #     "prediction": captions,
-        # }
+        data = {
+            "epoch": [self.current_epoch] * batch_size,
+            "step": [self.global_step] * batch_size,
+            "truth": sentences_text,
+            "prediction": captions,
+        }
 
-        # self.train_examples = pd.concat([self.train_examples, pd.DataFrame(data=data)])
-
+        self.train_examples = pd.concat([self.train_examples, pd.DataFrame(data=data)])
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -147,10 +169,10 @@ class ImageCaptioningSystem(pl.LightningModule):
         pixel_values, sentences_token, img_id, sentences_ids = batch
         batch_size = len(img_id)
 
-        sentences_text = [
-            self.tokenizer.batch_decode(sentences_token[i], skip_special_tokens=True)
-            for i in range(batch_size)
-        ]
+        # sentences_text = [
+        #     self.tokenizer.batch_decode(sentences_token[i], skip_special_tokens=True)
+        #     for i in range(batch_size)
+        # ]
 
         pixel_values = pixel_values.squeeze(dim=1)
 
@@ -182,5 +204,6 @@ class ImageCaptioningSystem(pl.LightningModule):
         # self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
     def configure_optimizers(self):
-        return DeepSpeedCPUAdam(self.parameters(), lr=self.lr)
-        # return FusedAdam(self.parameters(), lr=self.lr)
+        if self.cfg.compute.strategy == "deepspeed_stage_2_offload":
+            return DeepSpeedCPUAdam(self.parameters(), lr=self.cfg.training.lr)
+        return Adam(self.parameters(), lr=self.cfg.training.lr)

@@ -1,5 +1,4 @@
 seed: 42
-data_path: "/data"
 run_name: simple_run
 
 logging:
@@ -8,7 +7,5 @@ logging:
 training:
   lr: 0.0001
   mutliple_sentence_loss: False
-  batch_size: 32
   max_epochs: 50
   num_workers: 16
-  num_devices: 4

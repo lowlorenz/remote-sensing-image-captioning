@@ -15,6 +15,7 @@ import logging
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def train(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
     # seed everything for reproducibility
     # between the different nodes and devices
     pl.seed_everything(cfg["seed"])
@@ -22,34 +23,29 @@ def train(cfg: DictConfig):
     # this is needed because of the multiprocessing inherent to ddp
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    images_path = Path(cfg["data_path"], "NWPU_images")
-    annotations_path = Path(cfg["data_path"], "dataset_nwpu.json")
-
     logging.info("Initalizing dataset...")
 
     train_set = NWPU_Captions(
-        root=images_path,
-        annotations_file=annotations_path,
+        cfg=cfg,
         split="train",
         transform=ToTensor(),
     )
     val_set = NWPU_Captions(
-        root=images_path,
-        annotations_file=annotations_path,
+        cfg=cfg,
         split="val",
         transform=ToTensor(),
     )
 
     train_loader = torch.utils.data.DataLoader(
         train_set,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.compute.batch_size,
         shuffle=True,
         num_workers=cfg.training.num_workers,
     )
 
     val_loader = torch.utils.data.DataLoader(
         val_set,
-        batch_size=cfg.training.batch_size,
+        batch_size=cfg.compute.batch_size,
         shuffle=False,
         num_workers=cfg.training.num_workers,
     )
@@ -74,22 +70,19 @@ def train(cfg: DictConfig):
 
     trainer = pl.Trainer(
         callbacks=[checkpoint_callback, early_stopping_callback],
-        accelerator="gpu",
+        accelerator=cfg.compute.accelerator,
+        num_nodes=cfg.compute.num_nodes,
+        devices=cfg.compute.num_devices,
+        strategy=cfg.compute.strategy,
         max_epochs=cfg.training.max_epochs,
         log_every_n_steps=cfg.logging.log_every_n_steps,
         precision=16,
         num_sanity_val_steps=1,
         logger=logger,
         enable_progress_bar=False,
-        num_nodes=1,
-        devices=cfg.training.num_devices,
-        strategy="deepspeed_stage_2_offload",
-        # strategy=DeepSpeedStrategy(
-        #     stage=3,
-        # ),
     )
 
-    model = ImageCaptioningSystem(cfg.training.lr, cfg.training.mutliple_sentence_loss)
+    model = ImageCaptioningSystem(cfg)
     trainer.fit(model, train_loader, val_loader)
 
 

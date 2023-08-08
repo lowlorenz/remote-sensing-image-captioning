@@ -48,9 +48,9 @@ def read_annotations_file(root, annotation_file):
     return datasets
 
 
-def vectorize_annotations(dataset):
+def vectorize_annotations(cfg, dataset):
     # Tokenize the sentences
-    dataset["sentences"] = tokenize_sentences(dataset["sentences"])
+    dataset["sentences"] = tokenize_sentences(cfg, dataset["sentences"])
     # Convert lists to arrays
     dataset["image"] = np.array(dataset["image"])
     dataset["img_id"] = np.array(dataset["img_id"])
@@ -58,13 +58,16 @@ def vectorize_annotations(dataset):
     return dataset
 
 
-def tokenize_sentences(sentences):
-    # tokenizer = GPT2TokenizerFast.from_pretrained(
-    #     "nlpconnect/vit-gpt2-image-captioning"
-    # )
-
-    tokenizer = LlamaTokenizer.from_pretrained("/llama2", local_files_only=True)
-    tokenizer.pad_token = tokenizer.eos_token
+def tokenize_sentences(cfg, sentences):
+    if cfg.model.name == "gpt2":
+        tokenizer = GPT2TokenizerFast.from_pretrained(
+            "nlpconnect/vit-gpt2-image-captioning"
+        )
+    elif cfg.model.name == "llama2":
+        tokenizer = LlamaTokenizer.from_pretrained(
+            cfg.model.local_path, local_files_only=True
+        )
+        tokenizer.pad_token = tokenizer.eos_token
 
     # Convert the sentences to token-tensors by looping over the
     # sentences list and calling the tokenizer on every entry
@@ -81,11 +84,14 @@ def tokenize_sentences(sentences):
 
 
 class NWPU_Captions(torch.utils.data.Dataset):
-    def __init__(self, root, annotations_file, split, transform=None, seed=42):
+    def __init__(self, cfg, split, transform=None, seed=42):
         assert split in ["train", "val", "test"]
 
-        annotations = read_annotations_file(root, annotations_file)[split]
-        annotations = vectorize_annotations(annotations)
+        images_path = Path(cfg.dataset.data_path, "NWPU_images")
+        annotations_path = Path(cfg.dataset.data_path, "dataset_nwpu.json")
+
+        annotations = read_annotations_file(images_path, annotations_path)[split]
+        annotations = vectorize_annotations(cfg, annotations)
 
         self.images = annotations["image"]
         self.sentences = annotations["sentences"]
