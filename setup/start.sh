@@ -7,12 +7,12 @@
 #SBATCH --output=%j_%x.out
 
 #SBATCH --nodes=1
-#SBATCH --gpus=3
-#SBATCH --ntasks-per-node=3 # num GPUs per node - see https://lightning.ai/docs/pytorch/latest/clouds/cluster_advanced.html#troubleshooting
+#SBATCH --gpus=4
+#SBATCH --ntasks-per-node=4 # num GPUs per node - see https://lightning.ai/docs/pytorch/latest/clouds/cluster_advanced.html#troubleshooting
 
 #SBATCH --cpus-per-task=16
 
-#SBATCH --mem=128G
+#SBATCH --mem=256G
 
 # This included file contains the definition for $LOCAL_JOB_DIR to be used locally on the node.
 source "/etc/slurm/local_job_dir.sh"

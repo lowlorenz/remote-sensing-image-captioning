@@ -4,6 +4,7 @@ from model import ImageCaptioningSystem
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.strategies import DeepSpeedStrategy
 import torch
 import os
 import hydra
@@ -38,19 +39,19 @@ def train(cfg: DictConfig):
         split="val",
         transform=ToTensor(),
     )
-    
+
     train_loader = torch.utils.data.DataLoader(
         train_set,
         batch_size=cfg.training.batch_size,
         shuffle=True,
-        num_workers=cfg.training.num_workers
+        num_workers=cfg.training.num_workers,
     )
-    
+
     val_loader = torch.utils.data.DataLoader(
         val_set,
         batch_size=cfg.training.batch_size,
-        shuffle=False, 
-        num_workers=cfg.training.num_workers
+        shuffle=False,
+        num_workers=cfg.training.num_workers,
     )
 
     logger = WandbLogger(
@@ -82,7 +83,10 @@ def train(cfg: DictConfig):
         enable_progress_bar=False,
         num_nodes=1,
         devices=cfg.training.num_devices,
-        strategy="deepspeed_stage_2",
+        strategy="deepspeed_stage_2_offload",
+        # strategy=DeepSpeedStrategy(
+        #     stage=3,
+        # ),
     )
 
     model = ImageCaptioningSystem(cfg.training.lr, cfg.training.mutliple_sentence_loss)

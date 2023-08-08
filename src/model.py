@@ -1,5 +1,6 @@
 from transformers import VisionEncoderDecoderModel, GPT2TokenizerFast, VisionEncoderDecoderModel, LlamaConfig, ViTConfig, LlamaForCausalLM, ViTModel, LlamaTokenizer
 import transformers
+from deepspeed.ops.adam import FusedAdam, DeepSpeedCPUAdam
 from peft import LoraConfig, TaskType, get_peft_model
 
 import pandas as pd
@@ -50,19 +51,19 @@ class ImageCaptioningSystem(pl.LightningModule):
         self.lr = lr
         self.mutliple_sentence_loss = mutliple_sentence_loss
 
-        self.train_examples = pd.DataFrame(
-            columns=["epoch", "step", "truth", "prediction"]
-        )
-        self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
+        # self.train_examples = pd.DataFrame(
+        #     columns=["epoch", "step", "truth", "prediction"]
+        # )
+        # self.val_examples = pd.DataFrame(columns=["epoch", "truth", "prediction"])
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()
         self.max_tokens = 120
 
-        metrics = torchmetrics.MetricCollection(
-            [BLEUScore(), ROUGEScore(rouge_keys="rougeL")]
-        )
-        self.train_metrics = metrics.clone(prefix="train_")
-        self.val_metrics = metrics.clone(prefix="val_")
+        # metrics = torchmetrics.MetricCollection(
+        #     [BLEUScore(), ROUGEScore(rouge_keys="rougeL")]
+        # )
+        # self.train_metrics = metrics.clone(prefix="train_")
+        # self.val_metrics = metrics.clone(prefix="val_")
 
     def forward(self, x):
         return self.model(x)
@@ -118,12 +119,12 @@ class ImageCaptioningSystem(pl.LightningModule):
         loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
         # detokenize human readable captions
-        captions = self.tokenizer.batch_decode(
-            logits.argmax(dim=-1), skip_special_tokens=True
-        )
+        # captions = self.tokenizer.batch_decode(
+        #     logits.argmax(dim=-1), skip_special_tokens=True
+        # )
 
-        logs = self.train_metrics(captions, sentences_text)
-        self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
+        # logs = self.train_metrics(captions, sentences_text)
+        # self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
         self.log("train_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
 
         # # if this is the main process, log examples every 100 batches
@@ -158,12 +159,12 @@ class ImageCaptioningSystem(pl.LightningModule):
             loss, logits = self.calculate_loss(pixel_values, sentences_token)
 
         # detokenize human readable captions
-        captions = self.tokenizer.batch_decode(
-            logits.argmax(dim=-1), skip_special_tokens=True
-        )
+        # captions = self.tokenizer.batch_decode(
+        #     logits.argmax(dim=-1), skip_special_tokens=True
+        # )
 
-        logs = self.val_metrics(captions, sentences_text)
-        self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
+        # logs = self.val_metrics(captions, sentences_text)
+        # self.log_dict(logs, on_step=True, on_epoch=True, sync_dist=True)
         self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
 
         # # log some examples
@@ -181,4 +182,5 @@ class ImageCaptioningSystem(pl.LightningModule):
         # self.val_examples = pd.concat([self.val_examples, pd.DataFrame(data=data)])
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+        return DeepSpeedCPUAdam(self.parameters(), lr=self.lr)
+        # return FusedAdam(self.parameters(), lr=self.lr)
