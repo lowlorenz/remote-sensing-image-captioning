@@ -28,12 +28,10 @@ def train(cfg: DictConfig):
     train_set = NWPU_Captions(
         cfg=cfg,
         split="train",
-        transform=ToTensor(),
     )
     val_set = NWPU_Captions(
         cfg=cfg,
         split="val",
-        transform=ToTensor(),
     )
 
     train_loader = torch.utils.data.DataLoader(
@@ -53,7 +51,7 @@ def train(cfg: DictConfig):
     logger = WandbLogger(
         "NWPU-Captions",
         project="NWPU-Captions",
-        config=cfg,
+        # config=cfg,
     )
 
     # Create checkpoint callback
