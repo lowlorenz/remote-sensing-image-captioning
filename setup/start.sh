@@ -12,9 +12,9 @@
 
 #SBATCH --cpus-per-task=16
 
-#SBATCH --mem=256G
+#SBATCH --mem=128G
 
 # This included file contains the definition for $LOCAL_JOB_DIR to be used locally on the node.
 source "/etc/slurm/local_job_dir.sh"
 
-apptainer run --nv --bind $DATAPOOL3/datasets/NWPU-Captions:/data/NWPU-Captions --bind /data/cluster/users/hufe/llama2/llama-huggingface/:/llama2 app_container.sif 
+apptainer run --nv --bind $DATAPOOL3/datasets/NWPU-Captions:/mnt/data/NWPU-Captions --bind /data/cluster/users/hufe/llama2/llama-huggingface/:/llama2 app_container.sif 

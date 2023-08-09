@@ -1,0 +1,14 @@
+Bootstrap: localimage
+From: ./base_container.sif
+
+#==> 5. Copy files from the host computer to some container folder during build. One line per copy. Complete folders but no wildcards currently.
+%files
+  ../requirements.txt /opt/requirements.txt
+
+%post
+  python3 -m pip install update pip
+  pip install -r  /opt/requirements.txt
+
+%runscript
+  cd $HOME/rsic-baseline/remote-sensing-image-captioning
+  python src/main.py "$@"

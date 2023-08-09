@@ -2,5 +2,6 @@ accelerator: gpu
 num_nodes: 1
 num_devices: 4
 strategy: ddp
-batch_size: 128
+batch_size: 10
 logging: False
+accumulate_grad_batches: 4

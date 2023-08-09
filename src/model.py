@@ -111,8 +111,8 @@ class ImageCaptioningSystem(pl.LightningModule):
         # with torch.no_grad():
         loss, logits = self.calculate_loss(image, label)
 
-        # self.log("train_loss", loss, on_step=True,
-        #          on_epoch=True, sync_dist=True)
+        self.log("train_loss", loss, on_step=True,
+                 on_epoch=True, sync_dist=True)
 
         if not self.cfg.compute.logging:
             return loss
@@ -152,7 +152,7 @@ class ImageCaptioningSystem(pl.LightningModule):
         with torch.no_grad():
             loss, logits = self.calculate_loss(image, label)
 
-        # self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True, sync_dist=True)
         return loss
 
         # batch_size = len(img_id)

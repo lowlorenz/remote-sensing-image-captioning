@@ -71,6 +71,7 @@ def train(cfg: DictConfig):
         accelerator=cfg.compute.accelerator,
         num_nodes=cfg.compute.num_nodes,
         devices=cfg.compute.num_devices,
+        accumulate_grad_batches=cfg.compute.accumulate_grad_batches,
         strategy=cfg.compute.strategy,
         max_epochs=cfg.training.max_epochs,
         log_every_n_steps=cfg.logging.log_every_n_steps,
