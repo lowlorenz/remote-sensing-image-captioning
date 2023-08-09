@@ -6,7 +6,12 @@ import json
 import unicodedata
 import numpy as np
 from pathlib import Path
-from transformers import ViTFeatureExtractor, GPT2TokenizerFast, LlamaTokenizer
+from transformers import (
+    ViTFeatureExtractor,
+    GPT2TokenizerFast,
+    LlamaTokenizer,
+    BlipProcessor,
+)
 from torchvision.transforms import ToTensor
 
 
@@ -68,6 +73,10 @@ def tokenize_sentences(cfg, sentences):
             cfg.model.local_path, local_files_only=True
         )
         tokenizer.pad_token = tokenizer.eos_token
+    elif cfg.model.name == "blip":
+        tokenizer = BlipProcessor.from_pretrained(
+            "Salesforce/blip-image-captioning-large"
+        ).tokenizer
 
     # Convert the sentences to token-tensors by looping over the
     # sentences list and calling the tokenizer on every entry
