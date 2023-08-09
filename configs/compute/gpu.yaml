@@ -1,6 +1,6 @@
 accelerator: gpu
 num_nodes: 1
 num_devices: 1
-strategy: null
-batch_size: 16
+strategy: auto
+batch_size: 1
 logging: True

@@ -1,1 +1,3 @@
-name: gpt2  
+name: gpt2
+tokenizer_path: "nlpconnect/vit-gpt2-image-captioning"
+image_processor_path: "nlpconnect/vit-gpt2-image-captioning" 
