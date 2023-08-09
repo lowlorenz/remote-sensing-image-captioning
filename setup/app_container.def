@@ -11,4 +11,4 @@ From: ./base_container.sif
 
 %runscript
   cd $HOME/rsic-baseline/remote-sensing-image-captioning
-  python src/main.py
+  python3 src/main.py +model=llama2 +dataset=nwpu +compute=deepspeed.yaml

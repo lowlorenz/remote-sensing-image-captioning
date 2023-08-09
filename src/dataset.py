@@ -6,7 +6,7 @@ import json
 import unicodedata
 import numpy as np
 from pathlib import Path
-from transformers import ViTFeatureExtractor, GPT2TokenizerFast, LlamaTokenizer
+from transformers import AutoImageProcessor, GPT2TokenizerFast, LlamaTokenizer, AutoTokenizer
 from torchvision.transforms import ToTensor
 
 
@@ -59,15 +59,8 @@ def vectorize_annotations(cfg, dataset):
 
 
 def tokenize_sentences(cfg, sentences):
-    if cfg.model.name == "gpt2":
-        tokenizer = GPT2TokenizerFast.from_pretrained(
-            "nlpconnect/vit-gpt2-image-captioning"
-        )
-    elif cfg.model.name == "llama2":
-        tokenizer = LlamaTokenizer.from_pretrained(
-            cfg.model.local_path, local_files_only=True
-        )
-        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model.decoder_path,)
+    tokenizer.pad_token = tokenizer.eos_token
 
     # Convert the sentences to token-tensors by looping over the
     # sentences list and calling the tokenizer on every entry
@@ -101,9 +94,7 @@ class NWPU_Captions(torch.utils.data.Dataset):
         self.transform = transform
         self.seed = seed
 
-        self.image_processor = ViTFeatureExtractor.from_pretrained(
-            "nlpconnect/vit-gpt2-image-captioning"
-        )
+        self.image_processor = AutoImageProcessor.from_pretrained(cfg.model.encoder_path)
 
     def __len__(self):
         return len(self.images)

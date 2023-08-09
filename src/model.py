@@ -8,6 +8,8 @@ from transformers import (
     ViTModel,
     LlamaTokenizer,
     AutoProcessor,
+    AutoConfig,
+    AutoTokenizer,
 )
 import transformers
 from deepspeed.ops.adam import FusedAdam, DeepSpeedCPUAdam
@@ -48,16 +50,36 @@ class ImageCaptioningSystem(pl.LightningModule):
             )
 
         elif self.cfg.model.name == "llama2":
+            encoder_config = AutoConfig.from_pretrained(self.cfg.model.encoder_path)
+            decoder_config = AutoConfig.from_pretrained(self.cfg.model.decoder_path)
+            decoder_config.is_decoder = True
+            decoder_config.add_cross_attention = True
+            
             self.model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained(
-                "google/vit-base-patch16-224", cfg.model.local_path
+                encoder_pretrained_model_name_or_path=self.cfg.model.encoder_path, 
+                decoder_pretrained_model_name_or_path=self.cfg.model.decoder_path,
+                encoder_config=encoder_config,
+                decoder_config=decoder_config,
             )
-            self.tokenizer = LlamaTokenizer.from_pretrained(
-                cfg.model.local_path, local_files_only=True
+            
+            decoder_start_token_id = decoder_config.decoder_start_token_id
+            pad_token_id = decoder_config.pad_token_id
+            if decoder_start_token_id is None:
+                decoder_start_token_id = decoder_config.bos_token_id
+            if pad_token_id is None:
+                pad_token_id = decoder_config.eos_token_id
+            
+            print(self.model.config)
+            self.model.config.decoder.is_decoder = True
+            self.model.config.eos_token_id = decoder_config.eos_token_id
+            self.model.config.decoder_start_token_id = decoder_start_token_id
+            self.model.config.pad_token_id = pad_token_id
+                    
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.cfg.model.decoder_path,
             )
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-            self.model.decoder.config.decoder_start_token_id = (
-                self.model.decoder.config.bos_token_id
-            )
+            self.tokenizer.pad_token = self.tokenizer.convert_ids_to_tokens(self.model.config.pad_token_id)
+
 
         self.cross_entropy = torch.nn.CrossEntropyLoss()
         self.max_tokens = 120

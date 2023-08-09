@@ -48,7 +48,7 @@ six==1.16.0
 smmap==5.0.0
 tensorboardX==2.5.1
 termcolor==2.1.1
-tokenizers==0.13.2
+tokenizers==0.13.3
 # torch==1.10.1
 # torchaudio==0.10.1
 # torchmetrics==0.11.0
