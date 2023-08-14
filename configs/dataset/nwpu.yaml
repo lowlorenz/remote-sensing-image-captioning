@@ -1,2 +1,3 @@
-name: nwpu_captions
-data_path: /mnt/data/NWPU-Captions
+name: NWPU-Captions
+image_path: /mnt/data/NWPU-Captions/NWPU_images
+annotations_path: /mnt/data/NWPU-Captions/dataset_nwpu.json

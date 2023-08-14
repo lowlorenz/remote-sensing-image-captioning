@@ -1,0 +1,3 @@
+name: RSICD
+image_path: /mnt/data/RSICD/RSICD_images
+annotations_path: /mnt/data/RSICD/dataset_rsicd.json

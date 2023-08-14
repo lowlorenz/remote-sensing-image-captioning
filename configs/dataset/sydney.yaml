@@ -1,0 +1,3 @@
+name: Sydney-Captions
+image_path: /mnt/data/Sydney_captions/imgs
+annotations_path: /mnt/data/Sydney_captions/dataset.json

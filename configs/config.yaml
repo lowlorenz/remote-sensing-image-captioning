@@ -2,7 +2,7 @@ seed: 42
 run_name: simple_run
 
 logging:
-  log_every_n_steps: 150
+  log_every_n_steps: 30
 
 training:
   lr: 0.0001
